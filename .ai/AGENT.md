@@ -10,6 +10,31 @@
 > It is the authoritative record of what has been built, what is in progress,
 > and what comes next.
 
+---
+
+## ⛔ MANDATORY FIRST ACTIONS — Before anything else
+
+1. **Resolve your skills directory** (first path that exists):
+   - `.github/skills/` — GitHub Copilot
+   - `.kiro/steering/superpowers-skills/` — Kiro
+   - `.amazonq/rules/superpowers-skills/` — Amazon Q
+   - `.claude/skills/` — Claude Code
+   - `~/.agents/skills/superpowers/` — global fallback
+
+2. **Read the `using-superpowers` skill** from that directory. Now.
+
+3. **Classify the request** (Type A/B/C/D/E — see your IDE's workflow entry point).
+
+4. **If this involves any code, tests, debugging, or implementation:**
+   Read the `subagent-driven-development` skill. You will dispatch subagents.
+   **You will not write implementation code yourself. Not even one line.**
+
+5. **If resuming a session (Type E):**
+   Read `aidlc-docs/aidlc-state.md`, then re-read the plan file header.
+   Complete the GLUE-06 resumption checklist before touching anything.
+
+---
+
 ## Where the Workflow Rules Live (by IDE)
 
 | IDE | Workflow entry point | Skills location |
@@ -96,23 +121,34 @@ subagent for every coding task using `subagent-driven-development`.
 
 | AIDLC Stage | Action |
 |---|---|
-| Code Generation (Planning) | Invoke `writing-plans` skill |
-| Code Generation (Execution) | Invoke `subagent-driven-development` skill |
-| Any coding work | Invoke `test-driven-development` skill |
-| Before marking work done | Invoke `verification-before-completion` skill |
-| After completing a task | Invoke `requesting-code-review` skill |
-| After review feedback | Invoke `receiving-code-review` skill |
-| Bug or unexpected behaviour | Invoke `systematic-debugging` skill |
+| **Before any workflow** | Classify request (Type A/B/C/D/E) per GLUE-00 |
+| Code Generation (Planning) | Invoke `writing-plans` skill; add Superpowers plan header (GLUE-04) |
+| Code Generation (Execution) | Invoke `subagent-driven-development` skill (GLUE-01) |
+| Any coding work | Invoke `test-driven-development` skill (always in subagent task text) |
+| After each subagent completes | Invoke `verification-before-completion` skill |
+| After verification passes | Invoke `requesting-code-review` skill |
+| Build and Test complete | Invoke `verification-before-completion` then `requesting-code-review` |
+| Bug or unexpected behaviour | Invoke `systematic-debugging` skill — skip AIDLC (Type B) |
 | Starting feature branch | Invoke `using-git-worktrees` skill |
 | Merging or closing branch | Invoke `finishing-a-development-branch` skill |
-| Multiple independent tasks | Invoke `dispatching-parallel-agents` skill |
+| Multiple independent tasks | Invoke `dispatching-parallel-agents` skill (see GLUE-07) |
+| Session resumption | Verify partial work on disk; re-run staleness check; re-apply GLUE-02 |
 
 ---
 
 ## Skill Invocation Rule
 
-Before responding to any user message, check whether a Superpowers skill applies.
+Before responding to any user message, classify the request (Type A/B/C/D/E per
+GLUE-00 in the glue extension), then check whether a Superpowers skill applies.
 If there is even a 1% chance a skill is relevant, invoke it. This is not optional.
+
+Skills directory resolution order (GLUE-05):
+1. `.github/skills/` (Copilot)
+2. `.kiro/steering/superpowers-skills/` (Kiro)
+3. `.amazonq/rules/superpowers-skills/` (Amazon Q)
+4. `.claude/skills/` (Claude Code)
+5. `~/.agents/skills/superpowers/` (global)
+6. `~/.codex/superpowers/skills/` (direct clone)
 
 ---
 

@@ -105,8 +105,21 @@ install_aidlc() {
 
   local rules_src="$TMPDIR_WORK/aidlc/aidlc-rules/aws-aidlc-rules"
   local details_src="$TMPDIR_WORK/aidlc/aidlc-rules/aws-aidlc-rule-details"
+  local preamble="$EXTENSIONS_DIR/glue/entry-point-preamble.md"
 
   [[ -d "$rules_src" ]] || die "Expected aws-aidlc-rules/ in downloaded zip — structure may have changed"
+
+  # assemble_entry_point <dest_file> <upstream_src>
+  # Writes: preamble (if present) + upstream content → dest_file
+  assemble_entry_point() {
+    local dest="$1"
+    local src="$2"
+    if [[ -f "$preamble" ]]; then
+      cat "$preamble" "$src" > "$dest"
+    else
+      cp "$src" "$dest"
+    fi
+  }
 
   case "$IDE" in
     kiro)
@@ -114,17 +127,33 @@ install_aidlc() {
       cp -R "$rules_src" .kiro/steering/
       cp -R "$details_src" .kiro/
       info "Installed to .kiro/steering/aws-aidlc-rules/ and .kiro/aws-aidlc-rule-details/"
+      # Kiro loads rules from the directory; prepend preamble to the main entry file
+      if [[ -f ".kiro/steering/aws-aidlc-rules/core-workflow.md" ]]; then
+        assemble_entry_point \
+          "$TMPDIR_WORK/kiro-entry.md" \
+          ".kiro/steering/aws-aidlc-rules/core-workflow.md"
+        mv "$TMPDIR_WORK/kiro-entry.md" ".kiro/steering/aws-aidlc-rules/core-workflow.md"
+        info "Prepended entry-point preamble to .kiro/steering/aws-aidlc-rules/core-workflow.md"
+      fi
       ;;
     amazonq)
       mkdir -p .amazonq/rules
       cp -R "$rules_src" .amazonq/rules/
       cp -R "$details_src" .amazonq/
       info "Installed to .amazonq/rules/aws-aidlc-rules/ and .amazonq/aws-aidlc-rule-details/"
+      if [[ -f ".amazonq/rules/aws-aidlc-rules/core-workflow.md" ]]; then
+        assemble_entry_point \
+          "$TMPDIR_WORK/amazonq-entry.md" \
+          ".amazonq/rules/aws-aidlc-rules/core-workflow.md"
+        mv "$TMPDIR_WORK/amazonq-entry.md" ".amazonq/rules/aws-aidlc-rules/core-workflow.md"
+        info "Prepended entry-point preamble to .amazonq/rules/aws-aidlc-rules/core-workflow.md"
+      fi
       ;;
     cursor)
       mkdir -p .cursor/rules
       {
         printf -- '---\ndescription: "AI-DLC adaptive workflow for software development"\nalwaysApply: true\n---\n\n'
+        [[ -f "$preamble" ]] && cat "$preamble"
         cat "$rules_src/core-workflow.md"
       } > .cursor/rules/ai-dlc-workflow.mdc
       mkdir -p .aidlc-rule-details
@@ -133,31 +162,33 @@ install_aidlc() {
       ;;
     cline)
       mkdir -p .clinerules
-      cp "$rules_src/core-workflow.md" .clinerules/
+      assemble_entry_point ".clinerules/core-workflow.md" "$rules_src/core-workflow.md"
       mkdir -p .aidlc-rule-details
       cp -R "$details_src"/. .aidlc-rule-details/
       info "Installed to .clinerules/core-workflow.md and .aidlc-rule-details/"
       ;;
     claudecode)
-      cp "$rules_src/core-workflow.md" ./CLAUDE.md
+      assemble_entry_point "./CLAUDE.md" "$rules_src/core-workflow.md"
       mkdir -p .aidlc-rule-details
       cp -R "$details_src"/. .aidlc-rule-details/
       info "Installed to CLAUDE.md and .aidlc-rule-details/"
       ;;
     copilot)
       mkdir -p .github
-      cp "$rules_src/core-workflow.md" .github/copilot-instructions.md
+      assemble_entry_point ".github/copilot-instructions.md" "$rules_src/core-workflow.md"
       mkdir -p .aidlc-rule-details
       cp -R "$details_src"/. .aidlc-rule-details/
       info "Installed to .github/copilot-instructions.md and .aidlc-rule-details/"
       ;;
     codex|*)
-      cp "$rules_src/core-workflow.md" ./AGENTS.md
+      assemble_entry_point "./AGENTS.md" "$rules_src/core-workflow.md"
       mkdir -p .aidlc-rule-details
       cp -R "$details_src"/. .aidlc-rule-details/
       info "Installed to AGENTS.md and .aidlc-rule-details/"
       ;;
   esac
+
+  [[ -f "$preamble" ]] && info "Entry-point preamble prepended from extensions/glue/entry-point-preamble.md"
 }
 
 # ── Copy extensions into AIDLC rule-details ───────────────────────────────────
@@ -177,7 +208,10 @@ install_extensions() {
   # Glue layer (always installed)
   mkdir -p "$details_dest/extensions/glue"
   cp "$EXTENSIONS_DIR/glue/superpowers-handoff.md" "$details_dest/extensions/glue/"
-  info "Installed glue/superpowers-handoff.md"
+  # Keep the committed .aidlc-rule-details copy in sync with the canonical extensions/ copy
+  mkdir -p "$SCRIPT_DIR/.aidlc-rule-details/extensions/glue"
+  cp "$EXTENSIONS_DIR/glue/superpowers-handoff.md" "$SCRIPT_DIR/.aidlc-rule-details/extensions/glue/"
+  info "Installed glue/superpowers-handoff.md (synced to .aidlc-rule-details/extensions/glue/)"
 
   # Jira (always copy opt-in file; rules file only if --with-jira)
   mkdir -p "$details_dest/extensions/integrations/jira"
@@ -210,6 +244,86 @@ install_extensions() {
       info "Installed org-standard: $(basename "$f")"
     done
   fi
+}
+
+# ── Install extension skills into IDE skills directory ────────────────────────
+# Called after install_superpowers so extension skills layer on top of upstream.
+# Source: extensions/skills/<skill-name>/  (committed, user-maintained)
+# Dest:   same IDE skills directory that install_superpowers wrote to
+install_extension_skills() {
+  local ext_skills_dir="$EXTENSIONS_DIR/skills"
+  [[ -d "$ext_skills_dir" ]] || return 0   # nothing to install
+
+  # Count skill dirs
+  local count=0
+  for d in "$ext_skills_dir"/*/; do
+    [[ -d "$d" ]] && count=$((count + 1))
+  done
+  [[ $count -eq 0 ]] && return 0
+
+  section "Installing extension skills"
+
+  local home_dir="$HOME"
+  local clone_dir="$home_dir/.codex/superpowers"
+
+  case "$IDE" in
+    kiro)
+      local dest=".kiro/steering/superpowers-skills"
+      mkdir -p "$dest"
+      for skill_dir in "$ext_skills_dir"/*/; do
+        skill_name="$(basename "$skill_dir")"
+        cp -R "$skill_dir" "$dest/$skill_name"
+        info "Installed extension skill: $skill_name → $dest/"
+      done
+      ;;
+    amazonq)
+      local dest=".amazonq/rules/superpowers-skills"
+      mkdir -p "$dest"
+      for skill_dir in "$ext_skills_dir"/*/; do
+        skill_name="$(basename "$skill_dir")"
+        cp -R "$skill_dir" "$dest/$skill_name"
+        info "Installed extension skill: $skill_name → $dest/"
+      done
+      ;;
+    claudecode)
+      local dest=".claude/skills"
+      mkdir -p "$dest"
+      for skill_dir in "$ext_skills_dir"/*/; do
+        skill_name="$(basename "$skill_dir")"
+        rm -rf "$dest/$skill_name"
+        cp -R "$skill_dir" "$dest/$skill_name"
+        info "Installed extension skill: $skill_name → $dest/"
+      done
+      ;;
+    copilot)
+      local dest=".github/skills"
+      mkdir -p "$dest"
+      for skill_dir in "$ext_skills_dir"/*/; do
+        skill_name="$(basename "$skill_dir")"
+        cp -R "$skill_dir" "$dest/$skill_name"
+        info "Installed extension skill: $skill_name → $dest/"
+      done
+      ;;
+    cursor|cline|codex|*)
+      # These IDEs use the global ~/.agents/skills/superpowers/ path.
+      # Copy extension skills alongside upstream skills in the global symlink target.
+      local global_skills="$home_dir/.agents/skills/superpowers"
+      if [[ -d "$global_skills" || -L "$global_skills" ]]; then
+        # Resolve symlink to actual directory
+        local real_skills
+        real_skills="$(readlink -f "$global_skills" 2>/dev/null || echo "$global_skills")"
+        for skill_dir in "$ext_skills_dir"/*/; do
+          skill_name="$(basename "$skill_dir")"
+          cp -R "$skill_dir" "$real_skills/$skill_name"
+          info "Installed extension skill: $skill_name → $real_skills/"
+        done
+      else
+        warn "Global skills directory not found — extension skills not installed for $IDE"
+        warn "Run setup again after Superpowers is cloned, or copy manually:"
+        warn "  cp -R $ext_skills_dir/* ~/.agents/skills/superpowers/"
+      fi
+      ;;
+  esac
 }
 
 # ── Install Superpowers ───────────────────────────────────────────────────────
@@ -417,6 +531,7 @@ download_aidlc
 install_aidlc
 install_extensions
 install_superpowers
+install_extension_skills
 install_mcp_config
 
 echo

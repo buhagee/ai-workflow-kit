@@ -7,10 +7,11 @@ projects with a thin extension layer for integrations and org-specific rules.
 
 This repo contains **only what you need to maintain yourself**:
 
-- `extensions/glue/` — handoff rule connecting AIDLC planning to Superpowers execution
+- `extensions/glue/` — handoff rule + **entry-point preamble** prepended to every IDE's workflow file
+- `extensions/skills/` — custom skills installed alongside upstream Superpowers skills
 - `extensions/integrations/` — optional Jira and Confluence sync
 - `extensions/org-standards/` — your team's custom rules (add your own here)
-- `setup.sh` — installs both upstream layers and wires extensions into place
+- `setup.sh` — assembles both upstream layers + your extensions into the IDE-specific entry point
 
 Everything else is upstream:
 
@@ -18,6 +19,32 @@ Everything else is upstream:
 |---|---|---|
 | Planning | [awslabs/aidlc-workflows](https://github.com/awslabs/aidlc-workflows) | Inception → Construction → Operations phases |
 | Execution | [obra/superpowers](https://github.com/obra/superpowers) | TDD, debugging, subagent dispatch, code review |
+
+### How entry points are assembled
+
+`setup.sh` builds the IDE-specific entry point by concatenating:
+
+```
+extensions/glue/entry-point-preamble.md   ← always first (mandatory gates)
++
+upstream core-workflow.md                 ← AIDLC planning rules
+=
+.github/copilot-instructions.md           ← (or CLAUDE.md, AGENTS.md, etc.)
+```
+
+Skills are assembled the same way:
+
+```
+upstream superpowers skills               ← obra/superpowers
++
+extensions/skills/<your-skills>/          ← your custom skills
+=
+.github/skills/                           ← (or .kiro/steering/superpowers-skills/, etc.)
+```
+
+The generated files are **not committed** — re-created by `./setup.sh`.
+To customise the entry point for all IDEs, edit `extensions/glue/entry-point-preamble.md`.
+To add a custom skill for all IDEs, add it under `extensions/skills/`.
 
 ## Quick start
 
@@ -135,7 +162,11 @@ and Confluence examples for the format.
 │
 ├── extensions/                       ← the only thing you maintain
 │   ├── glue/
-│   │   └── superpowers-handoff.md    ← AIDLC→Superpowers handoff rules
+│   │   ├── superpowers-handoff.md    ← AIDLC→Superpowers handoff rules
+│   │   └── entry-point-preamble.md  ← prepended to every IDE entry point
+│   ├── skills/
+│   │   └── coordinating-agent/      ← add your own custom skills here
+│   │       └── SKILL.md
 │   ├── integrations/
 │   │   ├── jira/
 │   │   │   ├── jira-sync.md          ← Jira sync rules (active when opted in)

@@ -3,6 +3,12 @@
 Place your organisation-specific rules here. These are loaded as AIDLC extensions
 and become blocking constraints at each workflow stage.
 
+## Included rules (always enforced)
+
+| File | Purpose |
+|---|---|
+| `mcp-requirements.md` | Pre-flight MCP availability checks; subagent MCP tool guidance |
+
 ## How to add a rule file
 
 1. Create a `.md` file in this directory (or a subdirectory)
