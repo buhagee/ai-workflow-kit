@@ -1,97 +1,108 @@
-# AGENT.md — Single Entry File for All AI Agents
+# AGENT.md — Entry Point for All AI Agents
 
-> Read this file first. It tells you which system governs which kind of work.
+> **Read this file first.**
 >
-> **Project context is discovered automatically.** The AIDLC workflow detects the workspace, determines if it is greenfield or brownfield, and stores all project-specific context in `aidlc-docs/`. Read `aidlc-docs/aidlc-state.md` if it exists — it is the authoritative record of what has been built, what is in progress, and what comes next.
+> This project uses two upstream open-source workflow systems plus a thin
+> extension layer. Do not implement code directly — follow the workflow below.
+>
+> **Session continuity:** If `aidlc-docs/aidlc-state.md` exists, read it first.
+> It is the authoritative record of what has been built, what is in progress,
+> and what comes next.
 
 ---
 
-## Two-Layer System
+## Architecture
 
-This project uses two complementary systems that work at different stages of development. They do not overlap — each owns a distinct responsibility.
+```
+┌─────────────────────────────────────────────────────────┐
+│  LAYER 3: EXTENSIONS  (this repo — extensions/)         │
+│  Jira · Confluence · org standards · glue rules         │
+├─────────────────────────────────────────────────────────┤
+│  LAYER 2: EXECUTION  (obra/superpowers — upstream)      │
+│  TDD · debugging · subagent dispatch · code review      │
+├─────────────────────────────────────────────────────────┤
+│  LAYER 1: PLANNING  (awslabs/aidlc-workflows — upstream)│
+│  Inception · Construction · Operations phases           │
+└─────────────────────────────────────────────────────────┘
+```
 
-### Layer 1 — Planning (AIDLC)
+---
 
-**Governs**: All planning, requirements, design, architecture, and documentation work.
+## Layer 1 — Planning (AIDLC)
 
-**Entry point**: `.ai/aidlc/instructions.md`
+**Governs:** Requirements, design, architecture, documentation.
 
-**Use this layer when**:
+**Entry point:** The AIDLC core workflow rules loaded by your IDE (see setup.sh).
+
+**Use when:**
 - Starting any new feature, change, or investigation
-- You need to understand what to build before building it
 - Requirements, user stories, or design decisions need to be made
 - Architecture or infrastructure choices need to be documented
 
-**Rule details** (loaded on demand during the workflow): `.ai/aidlc/rules/`
+**Start any workflow with:**
+```
+Using AI-DLC, [describe your task]
+```
 
 ---
 
-### Layer 2 — Execution (Superpowers Skills)
+## Layer 2 — Execution (Superpowers)
 
-**Governs**: All coding, testing, debugging, deployment, and code review work.
+**Governs:** All coding, testing, debugging, deployment, code review.
 
-**Entry point**: `.ai/skills/using-superpowers/SKILL.md` — invoke this at the start of any execution task.
+**Entry point:** `using-superpowers` skill — invoke before any execution task.
 
-**Skills directory**: `.ai/skills/`
+**Use when:**
+- Writing, modifying, or reviewing code
+- Running or debugging tests
+- Deploying or verifying a build
+- Creating or merging a branch
 
-**Use this layer when**:
-- You are writing, modifying, or reviewing code
-- You are running or debugging tests
-- You are deploying or verifying a build
-- You are creating or merging a branch
+**The main agent NEVER writes implementation code directly.** Dispatch a
+subagent for every coding task using `subagent-driven-development`.
 
 ---
 
-## Handoff Points — When Each Layer Hands Off to the Other
+## Layer 3 — Extensions
 
-| AIDLC Stage | Triggers this skill |
+**Governs:** Optional integrations and org-specific rules.
+
+**Location:** `extensions/` in this repo, copied to AIDLC rule-details by setup.sh.
+
+**Active extensions:**
+- `glue/superpowers-handoff.md` — enforces AIDLC→Superpowers handoff (always active)
+- `integrations/jira/` — Jira sync (opt-in at workflow start)
+- `integrations/confluence/` — Confluence sync (opt-in at workflow start)
+- `org-standards/` — team-specific rules (always active, add your own)
+
+---
+
+## Handoff Points
+
+| AIDLC Stage | Action |
 |---|---|
-| Code Generation (Part 1 - Planning) | `writing-plans` — structures the implementation plan |
-| Code Generation (Part 2 - Execution) | `subagent-driven-development` or `executing-plans` |
-| Any coding work | `test-driven-development` — governs all implementation |
-| Before marking a unit done | `verification-before-completion` |
-| After a unit is complete | `requesting-code-review` |
-| After review feedback arrives | `receiving-code-review` |
-| Bug or unexpected behaviour | `systematic-debugging` |
-| Starting feature work on a branch | `using-git-worktrees` |
-| Merging or closing a branch | `finishing-a-development-branch` |
-| Multiple independent tasks | `dispatching-parallel-agents` |
+| Code Generation (Planning) | Invoke `writing-plans` skill |
+| Code Generation (Execution) | Invoke `subagent-driven-development` skill |
+| Any coding work | Invoke `test-driven-development` skill |
+| Before marking work done | Invoke `verification-before-completion` skill |
+| After completing a task | Invoke `requesting-code-review` skill |
+| After review feedback | Invoke `receiving-code-review` skill |
+| Bug or unexpected behaviour | Invoke `systematic-debugging` skill |
+| Starting feature branch | Invoke `using-git-worktrees` skill |
+| Merging or closing branch | Invoke `finishing-a-development-branch` skill |
+| Multiple independent tasks | Invoke `dispatching-parallel-agents` skill |
 
 ---
 
-## Package Structure Reference
+## Skill Invocation Rule
 
-```
-[project root]/
-│
-├── .ai/                            ← ENTIRE AGENT PACKAGE LIVES HERE
-│   ├── AGENT.md                    ← YOU ARE HERE — read first
-│   ├── aidlc/
-│   │   ├── instructions.md         ← AIDLC planning workflow
-│   │   └── rules/                  ← Detailed phase rule files
-│   │       ├── common/
-│   │       ├── inception/
-│   │       ├── construction/
-│   │       └── operations/
-│   └── skills/                     ← Superpowers execution skills
-│       ├── using-superpowers/      ← Start here for execution tasks
-│       ├── brainstorming/
-│       ├── writing-plans/
-│       ├── test-driven-development/
-│       ├── verification-before-completion/
-│       ├── requesting-code-review/
-│       ├── receiving-code-review/
-│       ├── systematic-debugging/
-│       ├── using-git-worktrees/
-│       ├── executing-plans/
-│       ├── finishing-a-development-branch/
-│       ├── dispatching-parallel-agents/
-│       ├── subagent-driven-development/
-│       └── writing-skills/
-│
-└── aidlc-docs/                     ← Generated project docs (not part of the package)
-    ├── aidlc-state.md
-    ├── audit.md
-    ├── inception/
-    └── construction/
-```
+Before responding to any user message, check whether a Superpowers skill applies.
+If there is even a 1% chance a skill is relevant, invoke it. This is not optional.
+
+---
+
+## Upstream Sources
+
+- AIDLC: https://github.com/awslabs/aidlc-workflows (MIT-0)
+- Superpowers: https://github.com/obra/superpowers (MIT)
+- Setup: run `./setup.sh` to install/update both layers
