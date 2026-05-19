@@ -1,40 +1,22 @@
-# ⛔ BEFORE YOU DO ANYTHING — READ THIS FIRST
+# AI-DLC + Superpowers Workflow
 
-These steps are mandatory before ANY other action, including reading files,
-asking questions, or writing a single line of code.
+> **This preamble is prepended to the AIDLC core-workflow.md entry point.**
+> It adds one rule: when AIDLC reaches Code Generation, hand off to Superpowers.
+> Everything else — all planning phases — is owned entirely by the main agent.
 
-**Step 1 — Resolve your skills directory** (first path that exists):
-- `.github/skills/` ← GitHub Copilot
-- `.kiro/steering/superpowers-skills/` ← Kiro
-- `.amazonq/rules/superpowers-skills/` ← Amazon Q
-- `.claude/skills/` ← Claude Code
-- `~/.agents/skills/superpowers/` ← global fallback
+## MANDATORY: Superpowers Handoff at Code Generation
 
-**Step 2 — Read the `using-superpowers` skill** from that directory. Do it now.
+When you reach the **Code Generation** stage of the Construction Phase, you MUST
+read and follow the Superpowers handoff rules before writing a single line of code.
 
-**Step 2b — Read the `coordinating-agent` skill.** This defines your role for
-the entire session.
+The handoff rules are in:
+- `.aidlc-rule-details/extensions/glue/superpowers-handoff.md` (Kiro / Amazon Q)
+- `.aidlc-rule-details/extensions/glue/superpowers-handoff.md` (Cursor / Cline / Copilot / Claude Code)
 
-**Step 3 — Classify the request** (Type A/B/C/D/E — see Task Classification
-below).
+Read that file at Code Generation time. Not before.
 
-**Step 4 — If this involves ANY code, tests, debugging, or implementation:**
-Read the `subagent-driven-development` skill now. You will dispatch subagents.
-You will not write code yourself.
-
-**Step 5 — Check the Red Flags list:**
-
-| If you are thinking this... | It means... |
-|---|---|
-| "I'll just write this file quickly" | STOP. Dispatch a subagent. |
-| "I know what this needs, let me implement it" | STOP. Dispatch a subagent. |
-| "I'll dispatch a subagent after I get started" | STOP. Dispatch first, always. |
-| "This is a small change, subagent is overkill" | STOP. No exceptions. |
-| "Let me explore the codebase first" | STOP. Read skills first, they tell you how. |
-| "I need more context before reading skills" | STOP. Skills come before everything. |
-| "I remember what this skill says" | STOP. Skills evolve. Read the current version. |
-
-**The main agent NEVER writes implementation code. NEVER. Not even one line.**
-Dispatch a subagent for every coding task. This is not optional.
+**During all Inception and Construction design stages (everything before Code Generation),
+the main agent works directly — no subagents, no skill invocations, no handoffs.**
 
 ---
+

@@ -123,18 +123,20 @@ install_aidlc() {
 
   case "$IDE" in
     kiro)
+      # Kiro auto-loads every .md file in .kiro/steering/ into context.
+      # We only want the single AIDLC entry point (core-workflow.md) auto-loaded.
+      # Rule-details are read on-demand by the agent — keep them outside steering/.
       mkdir -p .kiro/steering
-      cp -R "$rules_src" .kiro/steering/
-      cp -R "$details_src" .kiro/
-      info "Installed to .kiro/steering/aws-aidlc-rules/ and .kiro/aws-aidlc-rule-details/"
-      # Kiro loads rules from the directory; prepend preamble to the main entry file
-      if [[ -f ".kiro/steering/aws-aidlc-rules/core-workflow.md" ]]; then
-        assemble_entry_point \
-          "$TMPDIR_WORK/kiro-entry.md" \
-          ".kiro/steering/aws-aidlc-rules/core-workflow.md"
-        mv "$TMPDIR_WORK/kiro-entry.md" ".kiro/steering/aws-aidlc-rules/core-workflow.md"
-        info "Prepended entry-point preamble to .kiro/steering/aws-aidlc-rules/core-workflow.md"
-      fi
+      # Write a single steering file with Kiro front-matter + preamble + core workflow
+      {
+        printf -- '---\ndescription: "AI-DLC adaptive workflow for software development"\ninclusion: always\n---\n\n'
+        [[ -f "$preamble" ]] && cat "$preamble"
+        cat "$rules_src/core-workflow.md"
+      } > .kiro/steering/aidlc-workflow.md
+      # Rule-details go outside steering/ so they are NOT auto-loaded
+      cp -R "$details_src" .kiro/aws-aidlc-rule-details
+      info "Installed AIDLC entry point to .kiro/steering/aidlc-workflow.md (auto-loaded)"
+      info "Installed rule-details to .kiro/aws-aidlc-rule-details/ (on-demand)"
       ;;
     amazonq)
       mkdir -p .amazonq/rules
@@ -273,7 +275,18 @@ install_extension_skills() {
       for skill_dir in "$ext_skills_dir"/*/; do
         skill_name="$(basename "$skill_dir")"
         cp -R "$skill_dir" "$dest/$skill_name"
-        info "Installed extension skill: $skill_name → $dest/"
+        # Inject inclusion: manual so Kiro doesn't auto-load extension skills either
+        local skill_file="$dest/$skill_name/SKILL.md"
+        if [[ -f "$skill_file" ]] && ! head -1 "$skill_file" | grep -q "^---"; then
+          local tmp_file
+          tmp_file="$(mktemp)"
+          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
+          mv "$tmp_file" "$skill_file"
+        elif [[ -f "$skill_file" ]] && ! grep -q "inclusion:" "$skill_file"; then
+          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
+            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
+        fi
+        info "Installed extension skill: $skill_name → $dest/ (inclusion: manual)"
       done
       ;;
     amazonq)
@@ -366,7 +379,24 @@ install_superpowers() {
         rm -rf "$kiro_skills"
       fi
       cp -R "$clone_dir/skills" "$kiro_skills"
-      info "Copied Superpowers skills to $kiro_skills (visible in Kiro steering panel)"
+      # Kiro auto-loads every .md file in .kiro/steering/ into context.
+      # Skills should only be read on-demand (when AIDLC reaches Code Generation).
+      # Inject `inclusion: manual` front-matter into every skill SKILL.md so Kiro
+      # treats them as manual-load only — the agent reads them explicitly when needed.
+      while IFS= read -r -d '' skill_file; do
+        if ! head -1 "$skill_file" | grep -q "^---"; then
+          # No front-matter at all — prepend a minimal one
+          local tmp_file
+          tmp_file="$(mktemp)"
+          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
+          mv "$tmp_file" "$skill_file"
+        elif ! grep -q "inclusion:" "$skill_file"; then
+          # Has front-matter but no inclusion key — insert it before the closing ---
+          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
+            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
+        fi
+      done < <(find "$kiro_skills" -name "SKILL.md" -print0)
+      info "Copied Superpowers skills to $kiro_skills (inclusion: manual — loaded on demand)"
       ;;
     amazonq)
       local q_skills=".amazonq/rules/superpowers-skills"
@@ -477,7 +507,7 @@ remove_stale_entrypoints() {
   # Each entry is "owner:path". Only paths whose owner != $IDE are removed.
   # All generated paths are safe to delete — nothing here is a committed asset.
   local all_entrypoints=(
-    "kiro:.kiro/steering/aws-aidlc-rules"
+    "kiro:.kiro/steering/aidlc-workflow.md"
     "kiro:.kiro/aws-aidlc-rule-details"
     "kiro:.kiro/steering/superpowers-skills"
     "amazonq:.amazonq/rules/aws-aidlc-rules"

@@ -1,81 +1,78 @@
 # Superpowers Execution Handoff
 
-## Rule GLUE-00: Task Classification Before Any Action
+> **When to read this file:** Only when AIDLC reaches the Code Generation stage
+> (Construction Phase). Do NOT read this during Inception or any design stage.
+> All planning is done by the main agent directly.
 
-**MANDATORY — run this BEFORE starting any workflow, including AIDLC.**
+---
 
-Classify the incoming request into one of five types. The type determines which
-workflow path to follow. Do not start AIDLC Workspace Detection until you have
-classified the request.
+## Rule GLUE-00: Task Classification (Code Generation Entry Check)
 
-| Type                         | Signals                                                                  | Workflow path                                                                                            |
-| ------------------------------| --------------------------------------------------------------------------| ----------------------------------------------------------------------------------------------------------|
-| **A — New Feature / System** | "build", "create", "add feature", "new", "implement"                     | Full AIDLC workflow. Skip `brainstorming` — Requirements Analysis covers it.                             |
-| **B — Bug Fix**              | "fix", "bug", "error", "failing", "broken", "not working"                | Skip AIDLC. Invoke `systematic-debugging` directly. Use TDD for the fix.                                 |
-| **C — Refactoring**          | "refactor", "rewrite", "migrate", "upgrade", "convert", "clean up"       | Skip AIDLC inception. Run Reverse Engineering if brownfield. Invoke `brainstorming` for design. Use TDD. |
-| **D — Simple Change**        | "update config", "change text", "rename", "move file", single-file edits | Skip AIDLC. Dispatch single subagent with TDD.                                                           |
-| **E — Resume Session**       | "continue", "resume", "where were we", "pick up", "carry on"             | Read `aidlc-docs/aidlc-state.md`. Resume from last checkpoint. See GLUE-06.                              |
+Before dispatching any subagent for code execution, confirm the request type:
 
-**When in doubt between A and B/C/D, default to A** (full AIDLC). It is better
-to do more planning than to skip it.
+| Type | Signals | Action |
+|---|---|---|
+| **A — New Feature / System** | Arrived here via full AIDLC planning | Proceed with subagent dispatch per GLUE-01 |
+| **B — Bug Fix** | "fix", "bug", "error", "failing", "broken" | Skip Code Generation. Invoke `systematic-debugging` skill directly. |
+| **C — Refactoring** | "refactor", "rewrite", "migrate", "upgrade" | Invoke `brainstorming` skill for design, then proceed with subagent dispatch. |
+| **D — Simple Change** | Single-file edits, config changes, renames | Dispatch a single subagent with TDD. No full AIDLC needed. |
+| **E — Resume Session** | "continue", "resume", "pick up" | Read `aidlc-docs/aidlc-state.md`. Resume from last checkpoint. See GLUE-06. |
+
+**If the request arrived here via full AIDLC planning (Type A), proceed directly to GLUE-01.**
 
 ---
 
 ## Rule GLUE-01: Execution Layer Handoff
 
-When AIDLC reaches the **Code Generation** stage (Construction Phase), you MUST
-hand off execution to the Superpowers skills layer. Do not implement code directly
-in the planning session.
+You are now at Code Generation. Hand off execution to Superpowers. Do not write
+implementation code yourself.
 
-**Mandatory steps at Code Generation:**
+**Mandatory steps:**
 
 1. Resolve your skills directory using GLUE-05 (path resolution order)
-2. Read the `subagent-driven-development` skill from that directory
-3. Follow it exactly — AIDLC owns the plan content, story traceability, and
+2. Read the `using-superpowers` skill from that directory
+3. Read the `subagent-driven-development` skill from that directory
+4. Follow it exactly — AIDLC owns the plan content, story traceability, and
    approval gates; Superpowers owns execution mechanics (fresh subagent per task,
    two-stage spec + quality review after each task)
-4. Before dispatching any subagent, read the `test-driven-development` skill and
+5. Before dispatching any subagent, read the `test-driven-development` skill and
    include "Use the test-driven-development skill" in every subagent's task text
-5. After each subagent completes, invoke `verification-before-completion` then
+6. After each subagent completes, invoke `verification-before-completion` then
    `requesting-code-review` before marking the plan step `[x]`
-6. The plan file produced by AIDLC Code Planning is the input to
+7. The plan file produced by AIDLC Code Planning is the input to
    `subagent-driven-development` — pass it as the plan file path
 
 **The main agent NEVER writes implementation code directly.** Its job during
 execution is coordination, context management, and review — not implementation.
 Dispatch a subagent for every coding task.
 
-**Explicit AIDLC stage hooks for Superpowers skills:**
+**AIDLC stage hooks for Superpowers skills:**
 
 | AIDLC stage | Mandatory skill invocation |
 |---|---|
-| Code Generation Part 1 (Planning) | Read `writing-plans` skill; ensure plan header includes `> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development` |
+| Code Generation Part 1 (Planning) | Read `writing-plans` skill; ensure plan header includes the REQUIRED SUB-SKILL directive (see GLUE-04) |
 | Code Generation Part 2 (Execution) | Read `subagent-driven-development`; dispatch subagent per task |
 | Every subagent dispatch | Include "Use test-driven-development skill" in task text |
 | After each subagent completes | Invoke `verification-before-completion` |
 | After verification passes | Invoke `requesting-code-review` |
 | Build and Test complete | Invoke `verification-before-completion` then `requesting-code-review` |
 | Bug fix request (Type B) | Invoke `systematic-debugging` before any code changes |
-| Starting any feature | Invoke `using-git-worktrees` |
+| Starting any feature branch | Invoke `using-git-worktrees` |
 | Merging / closing branch | Invoke `finishing-a-development-branch` |
-| Multiple independent units | Invoke `dispatching-parallel-agents` (see GLUE-07 for parallel rules) |
+| Multiple independent units | Invoke `dispatching-parallel-agents` (see GLUE-07) |
 
 ---
 
-## Rule GLUE-02: Skill Invocation Before Any Response
+## Rule GLUE-02: Skill Invocation Trigger Map
 
-Before responding to any user message, check whether a Superpowers skill applies.
-If there is even a 1% chance a skill is relevant, invoke it. This is not optional.
+Once in execution mode, check this table before each action:
 
-Skill trigger mapping:
-
-| User intent | Skill to invoke |
+| Situation | Skill to invoke |
 |---|---|
-| New feature / change (Type A) | Full AIDLC → `subagent-driven-development` at Code Generation |
-| Bug / unexpected behaviour (Type B) | `systematic-debugging` immediately, before AIDLC |
-| Refactoring (Type C) | `brainstorming` → Reverse Engineering → `subagent-driven-development` |
-| Implementing a plan | `subagent-driven-development` or `executing-plans` |
-| Writing any code | `test-driven-development` (always included in subagent task text) |
+| Implementing a plan (Type A) | `subagent-driven-development` |
+| Bug / unexpected behaviour (Type B) | `systematic-debugging` immediately |
+| Refactoring (Type C) | `brainstorming` → then `subagent-driven-development` |
+| Writing any code | `test-driven-development` (always in subagent task text) |
 | Claiming work is done | `verification-before-completion` |
 | After completing a task | `requesting-code-review` |
 | Receiving review feedback | `receiving-code-review` |
@@ -84,8 +81,7 @@ Skill trigger mapping:
 | Multiple independent tasks | `dispatching-parallel-agents` |
 
 **Priority rule when multiple skills apply:** The order in the table above is the
-priority order. For a bug fix that also involves multiple tasks, invoke
-`systematic-debugging` first, then `dispatching-parallel-agents` if needed.
+priority order.
 
 ---
 
@@ -205,13 +201,14 @@ When the request is classified as Type E (Resume Session):
 
 **MANDATORY resumption checklist — tick every box before any other action:**
 
-- [ ] Read `using-superpowers` skill from the resolved skills directory
-- [ ] Read `subagent-driven-development` skill
-- [ ] Read `verification-before-completion` skill
+- [ ] Read `aidlc-docs/aidlc-state.md`
+- [ ] Identify last completed stage — if still in planning, resume AIDLC directly (no skills needed yet)
+- [ ] If resuming at Code Generation or later: read `using-superpowers` skill
+- [ ] If resuming at Code Generation or later: read `subagent-driven-development` skill
 - [ ] Re-read the plan file header — if it contains a `REQUIRED SUB-SKILL` directive, invoke that skill now
 - [ ] Confirm: I will not write any implementation code directly
 
-Only after all five boxes are checked: proceed with resumption.
+Only after all boxes are checked: proceed with resumption.
 
 ---
 
