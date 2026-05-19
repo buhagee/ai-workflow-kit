@@ -281,9 +281,21 @@ install_superpowers() {
       info "  /add-plugin superpowers  (in Cursor Agent chat)"
       ;;
     copilot)
-      info "Copilot also supports the plugin marketplace:"
-      info "  copilot plugin marketplace add obra/superpowers-marketplace"
-      info "  copilot plugin install superpowers@superpowers-marketplace"
+      # Copy skills into .github/skills/ — the standard project-level discovery
+      # path for GitHub Copilot in VS Code (and Copilot CLI / cloud agent).
+      # ~/.agents/skills/superpowers/ is one level too deep for auto-discovery;
+      # .github/skills/<skill-name>/SKILL.md is the correct layout.
+      local copilot_skills=".github/skills"
+      if [[ -d "$copilot_skills" ]]; then
+        rm -rf "$copilot_skills"
+      fi
+      mkdir -p "$copilot_skills"
+      for skill_dir in "$clone_dir/skills"/*/; do
+        skill_name="$(basename "$skill_dir")"
+        cp -R "$skill_dir" "$copilot_skills/$skill_name"
+      done
+      info "Copied Superpowers skills to $copilot_skills/ (auto-discovered by VS Code Copilot)"
+      info "Skills are also available at ~/.agents/skills/superpowers/ for CLI use"
       ;;
   esac
 
@@ -337,6 +349,60 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# ── Remove stale entry-point files from other IDEs ────────────────────────────
+# Each IDE writes its workflow rules to a specific file/directory. When you
+# switch IDEs (or re-run setup for a different one), the old files stay on disk
+# and confuse agents into thinking there are multiple entry points.
+# This function removes every entry-point artifact that does NOT belong to the
+# currently selected IDE.
+remove_stale_entrypoints() {
+  section "Removing stale entry-point files for other IDEs"
+
+  # Map: IDE → its entry-point file/dir (the one we DO NOT remove for $IDE)
+  # Format: "ide:path_to_remove"
+  # Each entry is "owner:path". Only paths whose owner != $IDE are removed.
+  # All generated paths are safe to delete — nothing here is a committed asset.
+  local all_entrypoints=(
+    "kiro:.kiro/steering/aws-aidlc-rules"
+    "kiro:.kiro/aws-aidlc-rule-details"
+    "kiro:.kiro/steering/superpowers-skills"
+    "amazonq:.amazonq/rules/aws-aidlc-rules"
+    "amazonq:.amazonq/aws-aidlc-rule-details"
+    "amazonq:.amazonq/rules/superpowers-skills"
+    "cursor:.cursor/rules/ai-dlc-workflow.mdc"
+    "cline:.clinerules/core-workflow.md"
+    "claudecode:CLAUDE.md"
+    "claudecode:.claude/skills"
+    "copilot:.github/copilot-instructions.md"
+    "copilot:.github/skills"
+    "codex:AGENTS.md"
+  )
+
+  # .aidlc-rule-details is shared by cursor/cline/claudecode/copilot/codex
+  # Only remove it when switching TO kiro or amazonq (which use their own paths)
+  if [[ "$IDE" == "kiro" || "$IDE" == "amazonq" ]]; then
+    if [[ -e ".aidlc-rule-details" ]]; then
+      rm -rf ".aidlc-rule-details"
+      info "Removed .aidlc-rule-details (not used by $IDE)"
+    fi
+  fi
+
+  local removed=0
+  for entry in "${all_entrypoints[@]}"; do
+    local owner="${entry%%:*}"
+    local path="${entry#*:}"
+    # Skip the entry that belongs to the current IDE
+    [[ "$owner" == "$IDE" ]] && continue
+    if [[ -e "$path" ]]; then
+      rm -rf "$path"
+      info "Removed stale: $path (was for $owner)"
+      removed=$((removed + 1))
+    fi
+  done
+
+  [[ $removed -eq 0 ]] && info "No stale entry-point files found"
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 echo
 echo "╔══════════════════════════════════════════════════════╗"
@@ -346,6 +412,7 @@ echo "╚═══════════════════════�
 detect_ide
 info "Detected IDE: $IDE"
 
+remove_stale_entrypoints
 download_aidlc
 install_aidlc
 install_extensions

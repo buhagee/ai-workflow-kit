@@ -153,21 +153,39 @@ and Confluence examples for the format.
 ```
 
 After running `setup.sh`, the IDE-specific directories are created (e.g.
-`.kiro/`, `CLAUDE.md`, `.cursor/rules/`) but are not committed — they are
-generated artifacts. Add them to `.gitignore` if you prefer, or commit them
-if you want the workflow available without running setup.
+`.kiro/`, `CLAUDE.md`, `.cursor/rules/`, `.github/skills/`) but are not
+committed — they are generated artifacts pulled from upstream. Add them to
+`.gitignore` if you prefer, or commit them if you want the workflow available
+without running setup.
+
+Each developer runs `./setup.sh --ide <their-ide>` once to install the workflow
+for their tool. Run `./setup.sh --update` to pull the latest upstream rules and
+skills at any time.
 
 ## Supported IDEs
 
-| IDE | Detection | AIDLC location |
-|---|---|---|
-| Kiro | `.kiro/` exists | `.kiro/steering/aws-aidlc-rules/` |
-| Amazon Q | `.amazonq/` exists | `.amazonq/rules/aws-aidlc-rules/` |
-| Cursor | `.cursor/` exists | `.cursor/rules/ai-dlc-workflow.mdc` |
-| Cline | `.clinerules/` exists | `.clinerules/core-workflow.md` |
-| Claude Code | `.claude/` or `CLAUDE.md` | `CLAUDE.md` |
-| GitHub Copilot | `.github/` exists | `.github/copilot-instructions.md` |
-| Codex / other | fallback | `AGENTS.md` |
+| IDE | Detection | AIDLC location | Skills location |
+|---|---|---|---|
+| Kiro | `.kiro/` exists | `.kiro/steering/aws-aidlc-rules/` | `.kiro/steering/superpowers-skills/` |
+| Amazon Q | `.amazonq/` exists | `.amazonq/rules/aws-aidlc-rules/` | `.amazonq/rules/superpowers-skills/` |
+| Cursor | `.cursor/` exists | `.cursor/rules/ai-dlc-workflow.mdc` | `~/.agents/skills/superpowers/` |
+| Cline | `.clinerules/` exists | `.clinerules/core-workflow.md` | `~/.agents/skills/superpowers/` |
+| Claude Code | `.claude/` or `CLAUDE.md` | `CLAUDE.md` | `.claude/skills/` |
+| GitHub Copilot | `.github/` exists | `.github/copilot-instructions.md` | `.github/skills/` |
+| Codex / other | fallback | `AGENTS.md` | `~/.agents/skills/superpowers/` |
+
+### GitHub Copilot / VS Code — Skills Discovery
+
+VS Code Copilot auto-discovers skills from `.github/skills/<skill-name>/SKILL.md`.
+`setup.sh --ide copilot` copies all 14 Superpowers skills there automatically.
+
+After running setup, open VS Code and type `/` in Copilot Chat — you should see
+all skills listed (brainstorming, systematic-debugging, subagent-driven-development, etc.).
+
+To update skills after a Superpowers upstream update:
+```bash
+./setup.sh --ide copilot --update
+```
 
 ## License
 

@@ -1,13 +1,28 @@
-# AGENT.md — Entry Point for All AI Agents
+# AGENT.md — Project Overview for AI Agents
 
-> **Read this file first.**
+> **This is the committed project overview.** It explains the architecture and
+> tells you where the real workflow rules live for your IDE.
 >
-> This project uses two upstream open-source workflow systems plus a thin
-> extension layer. Do not implement code directly — follow the workflow below.
+> The actual workflow instructions are in IDE-specific generated files (not
+> committed). Run `./setup.sh` to install them for your IDE. See the table below.
 >
 > **Session continuity:** If `aidlc-docs/aidlc-state.md` exists, read it first.
 > It is the authoritative record of what has been built, what is in progress,
 > and what comes next.
+
+## Where the Workflow Rules Live (by IDE)
+
+| IDE | Workflow entry point | Skills location |
+|---|---|---|
+| GitHub Copilot (VS Code) | `.github/copilot-instructions.md` *(generated)* | `.github/skills/` *(committed)* |
+| Kiro | `.kiro/steering/aws-aidlc-rules/` *(generated)* | `.kiro/steering/superpowers-skills/` *(generated)* |
+| Amazon Q | `.amazonq/rules/aws-aidlc-rules/` *(generated)* | `.amazonq/rules/superpowers-skills/` *(generated)* |
+| Claude Code | `CLAUDE.md` *(generated)* | `.claude/skills/` *(generated)* |
+| Cursor / Cline | `.cursor/rules/` or `.clinerules/` *(generated)* | `~/.agents/skills/superpowers/` |
+| Codex / generic | `AGENTS.md` *(generated)* | `~/.agents/skills/superpowers/` |
+
+Run `./setup.sh --ide <your-ide>` to generate the entry point for your IDE.
+Run `./setup.sh --update` to refresh both upstream layers.
 
 ---
 
