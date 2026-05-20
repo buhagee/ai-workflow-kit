@@ -60,19 +60,23 @@ window."]
 > deployment team infrastructure work, and ongoing support team effort are
 > estimated separately by those teams.
 
-| Work area | Low | Median | High | Notes |
-|---|---|---|---|---|
-| Discovery and planning | | | | Requirements workshops, design sessions, stakeholder reviews |
-| Architecture and technical design | | | | Included in planning above if tech lead involvement throughout |
-| Development (AI-assisted) | | | | Code generation, unit tests, code review |
-| Developer testing support | | | | Bug fixes during QA, test environment support |
-| Developer deployment support | | | | Deployment runbook, go-live support |
-| Project management and meetings | | | | Kickoff, check-ins, demos, retrospective |
-| Documentation | | | | Technical docs, runbook, knowledge transfer |
-| Developer support window | | | | Post-launch bug fixes and questions |
-| **Subtotal** | | | | |
-| **Contingency ([X]%)** | | | | 0.5× / 1× / 1.5× contingency rate |
-| **TOTAL** | | | | |
+| Work area                         | Low    | Median | High   | Notes                                                          |
+| -----------------------------------| --------| --------| --------| ----------------------------------------------------------------|
+| Discovery and planning            |        |        |        | Requirements workshops, design sessions, stakeholder reviews   |
+| Architecture and technical design |        |        |        | Included in planning above if tech lead involvement throughout |
+| Development (AI-assisted)         |        |        |        | Code generation, unit tests, code review                       |
+| Developer testing support         |        |        |        | Bug fixes during QA, test environment support                  |
+| Developer deployment support      |        |        |        | Deployment runbook, go-live support                            |
+| Project management and meetings   |        |        |        | Kickoff, check-ins, demos, retrospective                       |
+| Documentation                     |        |        |        | Technical docs, runbook, knowledge transfer                    |
+| Developer support window          |        |        |        | Post-launch bug fixes and questions                            |
+| **Subtotal**                      | **Xh** | **Xh** | **Xh** | Same across all scenarios — the work estimate does not change  |
+| **Contingency ([X]%)**            | +Xh    | +Xh    | +Xh    | 0.5x / 1x / 1.5x contingency rate                              |
+| **TOTAL**                         | **Lh** | **Mh** | **Hh** |                                                                |
+
+> Note: the per-row hours are identical across Low, Median, and High. Only the
+> contingency buffer and total change between scenarios. The three scenarios
+> model estimation uncertainty and scope risk — not different amounts of work.
 
 *Low = optimistic (scope locked, assumptions hold)*
 *Median = base estimate (most defensible — recommended default)*
