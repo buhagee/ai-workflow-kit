@@ -40,6 +40,97 @@ Skip decomposition — AIDLC already did it properly with stakeholder approval.
 
 ---
 
+## STEP 0.5: Clarification Questions (MANDATORY — before any files are created)
+
+**CRITICAL**: Do NOT create any estimate files until this step is complete.
+The developer is the driver. The agent must not make assumptions about ambiguous
+scope — every assumption that turns out to be wrong invalidates the estimate.
+
+### What to analyse
+
+Before writing questions, analyse the input for:
+
+- **Scope ambiguities** — items that could be interpreted as in or out of scope
+- **Technical unknowns** — integrations, APIs, or systems mentioned without detail
+- **Team and role assumptions** — who is involved, what they own, what is done by others
+- **Existing code assumptions** — what exists, what needs to be built, what needs to be modified
+- **Constraint gaps** — performance, security, compliance requirements not stated
+- **Option ambiguities** — where multiple implementation approaches exist and the choice affects effort significantly
+
+### Question file
+
+Create `estimates/[slug]-clarification-questions.md` (or
+`aidlc-docs/estimation/[slug]-clarification-questions.md` if `aidlc-docs/` exists).
+
+**File format — follow this exactly:**
+
+```markdown
+# Estimation Clarification Questions
+## [Project name]
+
+I need to clarify a few things before producing the estimate. Please answer
+each question by filling in the letter choice after the [Answer]: tag.
+If none of the options match, choose the last option and describe your answer.
+
+Let me know when you're done.
+
+## Question 1
+[Clear, specific question about one ambiguity]
+
+A) [First meaningful option]
+B) [Second meaningful option]
+C) [Third meaningful option — only if genuinely distinct]
+X) Other (please describe after [Answer]: tag below)
+
+[Answer]: 
+
+## Question 2
+...
+```
+
+**Rules for questions:**
+
+- Ask only about genuine ambiguities — do not ask questions you can reasonably
+  infer from the input
+- Each question covers exactly one ambiguity — no compound questions
+- Options must be mutually exclusive and cover the realistic choices
+- Always include `X) Other` as the last option — the developer may have a
+  different answer than any option you provide
+- Minimum 2 meaningful options before Other; maximum 5
+- Do not pad options to fill A, B, C, D slots — only include realistic choices
+- Questions must be ordered by impact on the estimate (highest impact first)
+
+### ⛔ GATE: Await Developer Answers
+
+**STOP after creating the question file.** Tell the developer:
+
+> "I've created `[path-to-questions-file]` with [N] questions about scope and
+> technical details that affect the estimate. Please answer each question by
+> filling in the letter choice after the `[Answer]:` tag. Let me know when
+> you're done."
+
+Do NOT proceed to Step 1 until the developer confirms they are done.
+
+### After receiving answers
+
+1. Read the question file
+2. Extract all answers from `[Answer]:` tags
+3. Check every answer is filled in — if any are blank, ask the developer to
+   complete them before proceeding
+4. **Check for contradictions and ambiguities** in the answers:
+   - Scope mismatch (e.g. "small change" but "affects multiple systems")
+   - Risk mismatch (e.g. "low risk" but "unknown third-party API")
+   - If contradictions found: create `[slug]-clarification-questions-2.md`,
+     explain the contradiction clearly, ask targeted follow-up questions,
+     and wait again before proceeding
+5. Only when all answers are received and consistent: proceed to Step 1
+
+**The developer's answers replace any assumptions the agent would have made.**
+Update the module decomposition, risk coefficients, and Phase 2 overhead
+based on what the developer has confirmed — not on what was initially inferred.
+
+---
+
 # PHASE 1 — Code Generation Estimate (Rounds)
 
 ## Problem
@@ -328,18 +419,46 @@ stakeholder validation.
 ```
 subtotal = code_generation_hours
          + planning_hours
-         + qa_hours
-         + deployment_hours
+         + developer_testing_support_hours
+         + developer_deployment_support_hours
          + meeting_hours
          + documentation_hours
-         + support_hours
-
-contingency = subtotal × contingency_rate
-total_hours = subtotal + contingency
+         + developer_support_window_hours
 ```
 
-Present as a range: `total_hours × 0.9` to `total_hours × 1.1` to reflect
-estimation confidence. Round to nearest half-hour.
+**The subtotal is a single fixed number.** Only the contingency varies across
+scenarios — do NOT recalculate the subtotal per scenario.
+
+```
+low    = round(subtotal × (1 + contingency_rate × 0.5),  nearest 0.5h)
+median = round(subtotal × (1 + contingency_rate),        nearest 0.5h)
+high   = round(subtotal × (1 + contingency_rate × 1.5),  nearest 0.5h)
+```
+
+**Example** (subtotal = 57h, contingency rate = 25%):
+```
+low    = 57 × 1.125 = 64h
+median = 57 × 1.25  = 71h   ← recommended default
+high   = 57 × 1.375 = 78h
+```
+This gives a 14h spread — realistic for a medium project. If the spread looks
+too wide, the contingency rate is too high, not the formula.
+
+### What each scenario means
+
+| Scenario | When to use it |
+|---|---|
+| **Low** | Assumptions confirmed by developer answers, scope is locked, team knows the stack. Use for internal planning or hard-budget clients with genuinely fixed scope. |
+| **Median** | Base estimate — standard risk applied, normal contingency. The most defensible number. Use as the default T&M quote. |
+| **High** | Key risks materialise: assumptions prove wrong, scope clarifications add work, rework required. Use for fixed-price contracts or projects with significant unknowns. |
+
+The developer picks one scenario to put forward. All three are documented in the
+technical workings so the choice is transparent and can be revisited.
+
+**Architecture and technical design row in the client template:** If architecture
+work is fully embedded in planning (tech lead involvement throughout), collapse
+both rows into "Discovery and planning" and note this in the table. Do not leave
+the architecture row blank without explanation.
 
 ---
 
@@ -378,11 +497,17 @@ Produce the estimate in two parts:
 | Meetings and communication | E | |
 | Documentation | F | |
 | Developer support window | G | Post-launch availability — not full support team |
-| **Subtotal** | H | |
-| Contingency ([X]%) | I | |
-| **Total** | **J** | |
+| **Subtotal** | **H** | |
 
-**Estimate range:** J×0.9 – J×1.1 hours
+**Three scenarios (contingency rate: X%):**
+
+| Scenario | Contingency | Total | When to use |
+|---|---|---|---|
+| **Low** | H × (rate × 0.5) | **L hours** | Scope locked, assumptions hold, optimistic |
+| **Median** | H × rate | **M hours** | Base estimate — most defensible |
+| **High** | H × (rate × 1.5) | **H hours** | Key risks materialise, significant unknowns |
+
+**→ Recommended scenario for this estimate:** [Low / Median / High] — [one sentence reason]
 
 > **Scope note:** This estimate covers developer hours only. QA team testing,
 > deployment team infrastructure work, and ongoing support team effort are
@@ -406,20 +531,24 @@ Produce the estimate in two parts:
 
 ### Effort Summary
 
-| Work area | Estimated hours |
-|---|---|
-| Discovery and planning | X |
-| Design and architecture | X |
-| Development (AI-assisted) | X |
-| Testing and quality assurance | X |
-| Deployment and infrastructure | X |
-| Project management and meetings | X |
-| Documentation | X |
-| Post-launch support | X |
-| **Total** | **X – X hours** |
+| Work area | Low | Median | High |
+|---|---|---|---|
+| Discovery and planning | X | X | X |
+| Development (AI-assisted) | X | X | X |
+| Developer testing support | X | X | X |
+| Developer deployment support | X | X | X |
+| Project management and meetings | X | X | X |
+| Documentation | X | X | X |
+| Developer support window | X | X | X |
+| **Total** | **L hrs** | **M hrs** | **H hrs** |
+
+*Low = optimistic (scope locked, assumptions hold)*
+*Median = base estimate (recommended)*
+*High = pessimistic (key risks materialise)*
 
 ### Notes
-- This estimate assumes [key assumptions].
+- This estimate covers developer hours only. QA, deployment, and support team
+  estimates are provided separately.
 - Contingency of [X]% is included for scope changes and technical unknowns.
 - [Any items explicitly excluded from scope.]
 
@@ -432,11 +561,44 @@ requirements workshop / reviewing the technical breakdown].
 
 ## Output Storage
 
-Save both parts to:
+Save the following files (create directories if they don't exist):
+
+**1. Full estimate document** (client summary + internal workings):
 - `aidlc-docs/estimation/[slug]-estimate.md` (if `aidlc-docs/` exists)
 - `estimates/[slug]-estimate.md` (pre-project, Mode A)
 
-Create the directory if it does not exist. Announce the saved path.
+**2. Developer estimate CSV** (for pasting into Jira comments, tickets, or spreadsheets):
+- `aidlc-docs/estimation/[slug]-estimate.csv`
+- `estimates/[slug]-estimate.csv`
+
+The CSV contains only the developer effort breakdown — no round counts, no risk
+coefficients, no internal methodology. The subtotal is a single fixed number;
+only the contingency varies across scenarios. Format:
+
+```csv
+Work Area,Hours,Notes
+Discovery and planning,X,"..."
+Development (AI-assisted),X,"..."
+Developer testing support,X,"..."
+Developer deployment support,X,"..."
+Project management and meetings,X,"..."
+Documentation,X,"..."
+Developer support window,X,"..."
+Subtotal,X,""
+,,""
+Scenario,Total Hours,When to use
+Low (contingency X%),X,"Scope locked, assumptions confirmed, team knows the stack"
+Median (contingency X%),X,"Base estimate — recommended for T&M quote"
+High (contingency X%),X,"Key risks materialise — use for fixed-price or high-uncertainty contracts"
+,,""
+Recommended,[Low/Median/High],"[one sentence reason]"
+```
+
+**CRITICAL**: The subtotal row is the same number in all three scenarios.
+Only the contingency percentage changes (0.5× / 1× / 1.5× the contingency rate).
+Do NOT use different subtotals per scenario — that produces a nonsensical range.
+
+Announce all saved paths to the user.
 
 ---
 

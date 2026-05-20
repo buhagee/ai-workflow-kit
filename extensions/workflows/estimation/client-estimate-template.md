@@ -60,21 +60,25 @@ window."]
 > deployment team infrastructure work, and ongoing support team effort are
 > estimated separately by those teams.
 
-| Work area                         | Hours (low) | Hours (high) | Notes                                                        |
-| -----------------------------------| -------------| --------------| --------------------------------------------------------------|
-| Discovery and planning            |             |              | Requirements workshops, design sessions, stakeholder reviews |
-| Architecture and technical design |             |              | System design, NFR analysis, infrastructure planning         |
-| Development (AI-assisted)         |             |              | Code generation, unit tests, code review                     |
-| Developer testing support         |             |              | Bug fixes during QA, test environment support                |
-| Developer deployment support      |             |              | Deployment runbook, go-live support                          |
-| Project management and meetings   |             |              | Kickoff, check-ins, demos, retrospective                     |
-| Documentation                     |             |              | Technical docs, runbook, knowledge transfer                  |
-| Developer support window          |             |              | Post-launch bug fixes and questions                          |
-| **Subtotal**                      |             |              |                                                              |
-| **Contingency ([X]%)**            |             |              | Scope changes and technical unknowns                         |
-| **TOTAL**                         |             |              |                                                              |
+| Work area | Low | Median | High | Notes |
+|---|---|---|---|---|
+| Discovery and planning | | | | Requirements workshops, design sessions, stakeholder reviews |
+| Architecture and technical design | | | | Included in planning above if tech lead involvement throughout |
+| Development (AI-assisted) | | | | Code generation, unit tests, code review |
+| Developer testing support | | | | Bug fixes during QA, test environment support |
+| Developer deployment support | | | | Deployment runbook, go-live support |
+| Project management and meetings | | | | Kickoff, check-ins, demos, retrospective |
+| Documentation | | | | Technical docs, runbook, knowledge transfer |
+| Developer support window | | | | Post-launch bug fixes and questions |
+| **Subtotal** | | | | |
+| **Contingency ([X]%)** | | | | 0.5× / 1× / 1.5× contingency rate |
+| **TOTAL** | | | | |
 
-**Estimate range: [low] – [high] hours**
+*Low = optimistic (scope locked, assumptions hold)*
+*Median = base estimate (most defensible — recommended default)*
+*High = pessimistic (key risks materialise, significant unknowns)*
+
+**Recommended scenario: [Low / Median / High]** — [one sentence reason]
 
 > Separate estimates for full QA testing, infrastructure provisioning, and
 > ongoing support will be provided by the respective teams.

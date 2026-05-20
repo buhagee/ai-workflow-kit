@@ -12,6 +12,24 @@ or after Inception is complete.
 
 ## The two phases
 
+### Before any files are created — clarification questions
+
+The first thing the agent does after analysing your input is create a
+clarification questions file. **No estimate files are produced until you answer
+these questions.**
+
+This is intentional. Every assumption the agent makes without asking you is a
+potential error in the estimate. The questions cover scope ambiguities, technical
+unknowns, team and role boundaries, and anything where the choice significantly
+affects effort.
+
+You answer by filling in the letter choice after each `[Answer]:` tag in the
+file. The agent waits for you to confirm you're done, then reads your answers
+before proceeding. If your answers contain contradictions, it asks a second round
+of targeted follow-up questions before moving on.
+
+The developer is the driver — the agent does not proceed on assumptions.
+
 ### Phase 1 — Code generation estimate
 
 Uses tool-call rounds as the base unit to estimate AI-assisted development
@@ -161,17 +179,20 @@ If your team structure differs from the standard profiles:
 
 ## Output files
 
-The agent saves one file with two sections:
+The agent saves one markdown file and one CSV:
 
-| Section | Contents | Share with |
+| File | Contents | Share with |
 |---|---|---|
-| Client summary | Scope, effort by work area, team, timeline, assumptions, risks, next steps | Client + manager (default) |
-| Internal workings | Module breakdown, round counts, risk coefficients, Phase 2 calculation | On demand — when manager asks how the numbers were derived |
+| `[slug]-estimate.md` | Client summary (three scenarios) + internal workings | Client summary → client/manager; workings → on demand |
+| `[slug]-estimate.csv` | Developer effort breakdown — Low / Median / High columns | Paste into Jira comment or ticket |
 
-The client summary is your default share for both client and manager. The
-internal workings section is the justification layer — keep it in your working
-copy and share it only if someone challenges the estimate or wants to understand
-the methodology.
+The CSV has three columns — Low, Median, High — plus a recommended scenario row.
+Pick the scenario that fits the client relationship and paste that column into Jira.
+
+The client summary shows all three scenarios so the client can see the range.
+The internal workings section explains how each scenario was derived.
+
+Keep both sections in your working copy. Strip the internal workings before sending to the client.
 
 Saved to:
 - `aidlc-docs/estimation/` if AIDLC docs exist (Mode B)
