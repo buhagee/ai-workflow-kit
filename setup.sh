@@ -408,6 +408,90 @@ install_extension_skills() {
   esac
 }
 
+# ── Install workflow skills into IDE skills directory ─────────────────────────
+# Workflow skills live in extensions/workflows/<workflow-name>/SKILL.md.
+# They are installed into the same IDE skills directory as extension skills,
+# so they are available on demand without any extra configuration.
+# Source: extensions/workflows/<workflow-name>/  (committed, user-maintained)
+install_workflow_skills() {
+  local workflows_dir="$EXTENSIONS_DIR/workflows"
+  [[ -d "$workflows_dir" ]] || return 0   # nothing to install
+
+  # Count workflow dirs that actually contain a SKILL.md
+  local count=0
+  for d in "$workflows_dir"/*/; do
+    [[ -f "$d/SKILL.md" ]] && count=$((count + 1))
+  done
+  [[ $count -eq 0 ]] && return 0
+
+  section "Installing workflow skills"
+
+  local home_dir="$HOME"
+
+  case "$IDE" in
+    kiro)
+      local dest=".kiro/steering/superpowers-skills"
+      mkdir -p "$dest"
+      for wf_dir in "$workflows_dir"/*/; do
+        [[ -f "$wf_dir/SKILL.md" ]] || continue
+        wf_name="$(basename "$wf_dir")"
+        cp -R "$wf_dir" "$dest/$wf_name"
+        inject_inclusion_manual "$dest/$wf_name/SKILL.md"
+        info "Installed workflow skill: $wf_name → $dest/ (inclusion: manual)"
+      done
+      ;;
+    amazonq)
+      local dest=".amazonq/rules/superpowers-skills"
+      mkdir -p "$dest"
+      for wf_dir in "$workflows_dir"/*/; do
+        [[ -f "$wf_dir/SKILL.md" ]] || continue
+        wf_name="$(basename "$wf_dir")"
+        cp -R "$wf_dir" "$dest/$wf_name"
+        info "Installed workflow skill: $wf_name → $dest/"
+      done
+      ;;
+    claudecode)
+      local dest=".claude/skills"
+      mkdir -p "$dest"
+      for wf_dir in "$workflows_dir"/*/; do
+        [[ -f "$wf_dir/SKILL.md" ]] || continue
+        wf_name="$(basename "$wf_dir")"
+        rm -rf "$dest/$wf_name"
+        cp -R "$wf_dir" "$dest/$wf_name"
+        info "Installed workflow skill: $wf_name → $dest/"
+      done
+      ;;
+    copilot)
+      local dest=".github/skills"
+      mkdir -p "$dest"
+      for wf_dir in "$workflows_dir"/*/; do
+        [[ -f "$wf_dir/SKILL.md" ]] || continue
+        wf_name="$(basename "$wf_dir")"
+        cp -R "$wf_dir" "$dest/$wf_name"
+        inject_inclusion_manual "$dest/$wf_name/SKILL.md"
+        info "Installed workflow skill: $wf_name → $dest/ (inclusion: manual)"
+      done
+      ;;
+    cursor|cline|codex|*)
+      local global_skills="$home_dir/.agents/skills/superpowers"
+      if [[ -d "$global_skills" || -L "$global_skills" ]]; then
+        local real_skills
+        real_skills="$(readlink -f "$global_skills" 2>/dev/null || echo "$global_skills")"
+        for wf_dir in "$workflows_dir"/*/; do
+          [[ -f "$wf_dir/SKILL.md" ]] || continue
+          wf_name="$(basename "$wf_dir")"
+          cp -R "$wf_dir" "$real_skills/$wf_name"
+          info "Installed workflow skill: $wf_name → $real_skills/"
+        done
+      else
+        warn "Global skills directory not found — workflow skills not installed for $IDE"
+        warn "Run setup again after Superpowers is cloned, or copy manually:"
+        warn "  cp -R $workflows_dir/* ~/.agents/skills/superpowers/"
+      fi
+      ;;
+  esac
+}
+
 # copy_relevant_skills <src_skills_dir> <dest_dir>
 # Copies only the Superpowers skills that are relevant when AIDLC is the planning
 # layer. Skills that duplicate AIDLC stages or are Superpowers-internal tooling
@@ -687,6 +771,7 @@ if $UPDATE_ONLY; then
   download_aidlc
   install_aidlc
   install_superpowers
+  install_workflow_skills
   info "Upstreams updated. Extensions and MCP config unchanged."
 else
   download_aidlc
@@ -694,6 +779,7 @@ else
   install_extensions
   install_superpowers
   install_extension_skills
+  install_workflow_skills
   install_mcp_config
   remove_stale_entrypoints
 fi

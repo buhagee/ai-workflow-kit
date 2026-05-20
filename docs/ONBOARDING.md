@@ -226,6 +226,7 @@ change.
 ├── extensions/                 ← everything your team maintains
 │   ├── glue/                   ← AIDLC→Superpowers handoff rules (don't edit unless you know why)
 │   ├── skills/                 ← add team-specific custom skills here
+│   ├── workflows/              ← standalone AI-assisted workflows (e.g. estimation)
 │   ├── integrations/           ← Jira and Confluence sync rules
 │   └── org-standards/          ← your team's coding rules and constraints
 │
@@ -236,6 +237,7 @@ change.
 └── aidlc-docs/                 ← generated during a workflow run (not committed)
     ├── inception/              ← requirements, user stories, application design
     ├── construction/           ← functional design, NFR, code generation plans
+    ├── estimation/             ← estimate documents (if generated post-Inception)
     ├── aidlc-state.md          ← current workflow state (read this to resume)
     └── audit.md                ← full audit trail of every AI decision
 ```

@@ -113,6 +113,25 @@ by `setup.sh`.
 - **Integrations** (`extensions/integrations/`) — opt-in at workflow start
 - **Org standards** (`extensions/org-standards/`) — always active, add your own rules here
 
+## Workflow extensions
+
+Standalone AI-assisted workflows you can run independently of the main AIDLC
+development loop. They are installed as skills by `setup.sh` and invoked on demand.
+
+### Estimation
+
+Produces a round-based effort estimate from either a plain project description
+or AIDLC units-of-work artifacts. Works pre-project (no AIDLC run needed) or
+post-Inception (uses the approved decomposition for higher accuracy).
+
+```
+Using the agent-estimation skill, estimate the effort for:
+[your project description]
+```
+
+See [extensions/workflows/estimation/how-to-use.md](extensions/workflows/estimation/how-to-use.md)
+for full invocation options, input modes, and output format.
+
 ## Jira / Confluence integration
 
 See [docs/WORKING-WITH-INTEGRATIONS.md](docs/WORKING-WITH-INTEGRATIONS.md) for
@@ -174,6 +193,10 @@ and Confluence examples for the format.
 │   ├── skills/
 │   │   └── <your-skill>/            ← add team-specific custom skills here
 │   │       └── SKILL.md
+│   ├── workflows/
+│   │   └── estimation/              ← standalone estimation workflow
+│   │       ├── SKILL.md             ← agent-estimation skill (AIDLC-aware)
+│   │       └── how-to-use.md        ← invocation guide
 │   ├── integrations/
 │   │   ├── jira/
 │   │   │   ├── jira-sync.md          ← Jira sync rules (active when opted in)
