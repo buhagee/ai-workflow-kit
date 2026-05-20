@@ -48,6 +48,35 @@ require() {
   command -v "$1" &>/dev/null || die "$1 is required but not installed. $2"
 }
 
+# inject_inclusion_manual <skill_file>
+# Ensures the SKILL.md has `inclusion: manual` in its YAML front-matter.
+# Works on Git Bash (Windows), macOS, and Linux without relying on sed \n.
+inject_inclusion_manual() {
+  local skill_file="$1"
+  [[ -f "$skill_file" ]] || return 0
+
+  if ! head -1 "$skill_file" | grep -q "^---"; then
+    # No front-matter at all — prepend a minimal one
+    local tmp_file
+    tmp_file="$(mktemp)"
+    printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
+    mv "$tmp_file" "$skill_file"
+  elif ! grep -q "inclusion:" "$skill_file"; then
+    # Has front-matter but no inclusion key — insert after the opening ---
+    # Use Python for portable in-place edit (avoids sed \n portability issues)
+    python3 - "$skill_file" <<'PYEOF'
+import sys, re
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+# Insert 'inclusion: manual' after the first '---' line
+patched = re.sub(r'^---\n', '---\ninclusion: manual\n', content, count=1)
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(patched)
+PYEOF
+  fi
+}
+
 # ── IDE Detection ─────────────────────────────────────────────────────────────
 detect_ide() {
   if [[ -n "$IDE" ]]; then return; fi
@@ -97,6 +126,51 @@ download_aidlc() {
     || die "Failed to download AIDLC from $zip_url"
   unzip -q "$TMPDIR_WORK/aidlc.zip" -d "$TMPDIR_WORK/aidlc"
   info "Downloaded and extracted AIDLC rules"
+
+  # Patch the upstream core-workflow.md so Code Generation hands off to Superpowers
+  patch_core_workflow "$TMPDIR_WORK/aidlc/aidlc-rules/aws-aidlc-rules/core-workflow.md"
+}
+
+# ── Patch upstream core-workflow.md ──────────────────────────────────────────
+# The upstream AIDLC core-workflow.md tells the agent to generate code itself
+# in Code Generation Part 2. We replace that instruction with the Superpowers
+# handoff so the AIDLC workflow itself enforces the handoff — not just the
+# preamble sitting above it.
+patch_core_workflow() {
+  local core_workflow="$1"   # path to the core-workflow.md to patch in-place
+  [[ -f "$core_workflow" ]] || return 0
+
+  python3 - "$core_workflow" <<'PYEOF'
+import sys, re
+
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# Locate the Code Generation section and replace Part 2 execution step.
+# We match the specific upstream text and replace it with the Superpowers handoff.
+old = (
+    "3. **PART 1 - Planning**: Create code generation plan with checkboxes, get user approval\n"
+    "4. **PART 2 - Generation**: Execute approved plan to generate code for this unit"
+)
+new = (
+    "3. **PART 1 - Planning**: Create code generation plan with checkboxes, get user approval\n"
+    "4. **PART 2 - Generation (Superpowers handoff — MANDATORY)**:\n"
+    "   - Read the Superpowers handoff file (path resolved in the preamble above)\n"
+    "   - Follow Rule GLUE-01: read `using-superpowers` skill, then `subagent-driven-development`\n"
+    "   - Dispatch a subagent for EVERY coding task — do NOT write implementation code yourself\n"
+    "   - Include \"Use the test-driven-development skill\" in every subagent's task text\n"
+    "   - After each subagent: invoke `verification-before-completion`, then `requesting-code-review`"
+)
+
+if old in content:
+    content = content.replace(old, new, 1)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print("  ✓ Patched Code Generation Part 2 → Superpowers handoff")
+else:
+    print("  ⚠ Code Generation patch target not found — upstream may have changed; preamble still enforces handoff")
+PYEOF
 }
 
 # ── Install AIDLC per IDE ─────────────────────────────────────────────────────
@@ -210,10 +284,7 @@ install_extensions() {
   # Glue layer (always installed)
   mkdir -p "$details_dest/extensions/glue"
   cp "$EXTENSIONS_DIR/glue/superpowers-handoff.md" "$details_dest/extensions/glue/"
-  # Keep the committed .aidlc-rule-details copy in sync with the canonical extensions/ copy
-  mkdir -p "$SCRIPT_DIR/.aidlc-rule-details/extensions/glue"
-  cp "$EXTENSIONS_DIR/glue/superpowers-handoff.md" "$SCRIPT_DIR/.aidlc-rule-details/extensions/glue/"
-  info "Installed glue/superpowers-handoff.md (synced to .aidlc-rule-details/extensions/glue/)"
+  info "Installed glue/superpowers-handoff.md → $details_dest/extensions/glue/"
 
   # Jira (always copy opt-in file; rules file only if --with-jira)
   mkdir -p "$details_dest/extensions/integrations/jira"
@@ -256,10 +327,10 @@ install_extension_skills() {
   local ext_skills_dir="$EXTENSIONS_DIR/skills"
   [[ -d "$ext_skills_dir" ]] || return 0   # nothing to install
 
-  # Count skill dirs
+  # Count skill dirs that actually contain a SKILL.md
   local count=0
   for d in "$ext_skills_dir"/*/; do
-    [[ -d "$d" ]] && count=$((count + 1))
+    [[ -f "$d/SKILL.md" ]] && count=$((count + 1))
   done
   [[ $count -eq 0 ]] && return 0
 
@@ -273,19 +344,11 @@ install_extension_skills() {
       local dest=".kiro/steering/superpowers-skills"
       mkdir -p "$dest"
       for skill_dir in "$ext_skills_dir"/*/; do
+        [[ -f "$skill_dir/SKILL.md" ]] || continue   # skip dirs without a SKILL.md
         skill_name="$(basename "$skill_dir")"
         cp -R "$skill_dir" "$dest/$skill_name"
         # Inject inclusion: manual so Kiro doesn't auto-load extension skills either
-        local skill_file="$dest/$skill_name/SKILL.md"
-        if [[ -f "$skill_file" ]] && ! head -1 "$skill_file" | grep -q "^---"; then
-          local tmp_file
-          tmp_file="$(mktemp)"
-          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
-          mv "$tmp_file" "$skill_file"
-        elif [[ -f "$skill_file" ]] && ! grep -q "inclusion:" "$skill_file"; then
-          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
-            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
-        fi
+        inject_inclusion_manual "$dest/$skill_name/SKILL.md"
         info "Installed extension skill: $skill_name → $dest/ (inclusion: manual)"
       done
       ;;
@@ -293,6 +356,7 @@ install_extension_skills() {
       local dest=".amazonq/rules/superpowers-skills"
       mkdir -p "$dest"
       for skill_dir in "$ext_skills_dir"/*/; do
+        [[ -f "$skill_dir/SKILL.md" ]] || continue
         skill_name="$(basename "$skill_dir")"
         cp -R "$skill_dir" "$dest/$skill_name"
         info "Installed extension skill: $skill_name → $dest/"
@@ -302,6 +366,7 @@ install_extension_skills() {
       local dest=".claude/skills"
       mkdir -p "$dest"
       for skill_dir in "$ext_skills_dir"/*/; do
+        [[ -f "$skill_dir/SKILL.md" ]] || continue
         skill_name="$(basename "$skill_dir")"
         rm -rf "$dest/$skill_name"
         cp -R "$skill_dir" "$dest/$skill_name"
@@ -312,19 +377,11 @@ install_extension_skills() {
       local dest=".github/skills"
       mkdir -p "$dest"
       for skill_dir in "$ext_skills_dir"/*/; do
+        [[ -f "$skill_dir/SKILL.md" ]] || continue
         skill_name="$(basename "$skill_dir")"
         cp -R "$skill_dir" "$dest/$skill_name"
         # Inject inclusion:manual (Kiro also reads .github/skills/)
-        local skill_file="$dest/$skill_name/SKILL.md"
-        if [[ -f "$skill_file" ]] && ! head -1 "$skill_file" | grep -q "^---"; then
-          local tmp_file
-          tmp_file="$(mktemp)"
-          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
-          mv "$tmp_file" "$skill_file"
-        elif [[ -f "$skill_file" ]] && ! grep -q "inclusion:" "$skill_file"; then
-          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
-            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
-        fi
+        inject_inclusion_manual "$dest/$skill_name/SKILL.md"
         info "Installed extension skill: $skill_name → $dest/ (inclusion: manual)"
       done
       ;;
@@ -337,6 +394,7 @@ install_extension_skills() {
         local real_skills
         real_skills="$(readlink -f "$global_skills" 2>/dev/null || echo "$global_skills")"
         for skill_dir in "$ext_skills_dir"/*/; do
+          [[ -f "$skill_dir/SKILL.md" ]] || continue
           skill_name="$(basename "$skill_dir")"
           cp -R "$skill_dir" "$real_skills/$skill_name"
           info "Installed extension skill: $skill_name → $real_skills/"
@@ -350,7 +408,34 @@ install_extension_skills() {
   esac
 }
 
-# ── Install Superpowers ───────────────────────────────────────────────────────
+# copy_relevant_skills <src_skills_dir> <dest_dir>
+# Copies only the Superpowers skills that are relevant when AIDLC is the planning
+# layer. Skills that duplicate AIDLC stages or are Superpowers-internal tooling
+# are excluded to avoid confusion and unnecessary context loading.
+#
+# Excluded (AIDLC replaces them):
+#   brainstorming      — AIDLC Inception covers requirements + design
+#   writing-plans      — AIDLC Code Generation Part 1 is the plan stage
+#   executing-plans    — fallback for no-subagent platforms; AIDLC uses subagent-driven-development
+#   writing-skills     — meta-skill for Superpowers contributors, not end users
+copy_relevant_skills() {
+  local src="$1"
+  local dest="$2"
+  local excluded="brainstorming writing-plans executing-plans writing-skills"
+
+  mkdir -p "$dest"
+  for skill_dir in "$src"/*/; do
+    local skill_name
+    skill_name="$(basename "$skill_dir")"
+    # Skip excluded skills
+    local skip=false
+    for ex in $excluded; do
+      [[ "$skill_name" == "$ex" ]] && skip=true && break
+    done
+    $skip && continue
+    cp -R "$skill_dir" "$dest/$skill_name"
+  done
+}
 install_superpowers() {
   section "Installing Superpowers (obra/superpowers)"
   require git "Install git: https://git-scm.com"
@@ -363,7 +448,7 @@ install_superpowers() {
   # Clone or update
   if [[ -d "$clone_dir/.git" ]]; then
     info "Superpowers already cloned at $clone_dir — pulling latest"
-    git -C "$clone_dir" pull --quiet
+    git -C "$clone_dir" pull --quiet || warn "Could not pull latest Superpowers (network issue?) — using existing clone"
   else
     info "Cloning obra/superpowers to $clone_dir"
     git clone --quiet --depth=1 https://github.com/obra/superpowers.git "$clone_dir"
@@ -389,23 +474,9 @@ install_superpowers() {
       if [[ -d "$kiro_skills" ]]; then
         rm -rf "$kiro_skills"
       fi
-      cp -R "$clone_dir/skills" "$kiro_skills"
-      # Kiro auto-loads every .md file in .kiro/steering/ into context.
-      # Skills should only be read on-demand (when AIDLC reaches Code Generation).
-      # Inject `inclusion: manual` front-matter into every skill SKILL.md so Kiro
-      # treats them as manual-load only — the agent reads them explicitly when needed.
+      copy_relevant_skills "$clone_dir/skills" "$kiro_skills"
       while IFS= read -r -d '' skill_file; do
-        if ! head -1 "$skill_file" | grep -q "^---"; then
-          # No front-matter at all — prepend a minimal one
-          local tmp_file
-          tmp_file="$(mktemp)"
-          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
-          mv "$tmp_file" "$skill_file"
-        elif ! grep -q "inclusion:" "$skill_file"; then
-          # Has front-matter but no inclusion key — insert it before the closing ---
-          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
-            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
-        fi
+        inject_inclusion_manual "$skill_file"
       done < <(find "$kiro_skills" -name "SKILL.md" -print0)
       info "Copied Superpowers skills to $kiro_skills (inclusion: manual — loaded on demand)"
       ;;
@@ -414,18 +485,17 @@ install_superpowers() {
       if [[ -d "$q_skills" ]]; then
         rm -rf "$q_skills"
       fi
-      cp -R "$clone_dir/skills" "$q_skills"
+      copy_relevant_skills "$clone_dir/skills" "$q_skills"
       info "Copied Superpowers skills to $q_skills"
       ;;
     claudecode)
       local claude_skills=".claude/skills"
       mkdir -p "$claude_skills"
-      # Copy each skill as a subdirectory (Claude Code skill discovery format)
       for skill_dir in "$clone_dir/skills"/*/; do
         skill_name="$(basename "$skill_dir")"
         rm -rf "$claude_skills/$skill_name"
-        cp -R "$skill_dir" "$claude_skills/$skill_name"
       done
+      copy_relevant_skills "$clone_dir/skills" "$claude_skills"
       info "Copied Superpowers skills to $claude_skills"
       info "Claude Code also supports the plugin marketplace:"
       info "  /plugin install superpowers@claude-plugins-official"
@@ -436,32 +506,14 @@ install_superpowers() {
       info "  /add-plugin superpowers  (in Cursor Agent chat)"
       ;;
     copilot)
-      # Copy skills into .github/skills/ — the standard project-level discovery
-      # path for GitHub Copilot in VS Code (and Copilot CLI / cloud agent).
-      # ~/.agents/skills/superpowers/ is one level too deep for auto-discovery;
-      # .github/skills/<skill-name>/SKILL.md is the correct layout.
-      # NOTE: Kiro also reads .github/skills/ — inject inclusion:manual so skills
-      # are not auto-loaded when both Kiro and Copilot are used on the same repo.
       local copilot_skills=".github/skills"
       if [[ -d "$copilot_skills" ]]; then
         rm -rf "$copilot_skills"
       fi
-      mkdir -p "$copilot_skills"
-      for skill_dir in "$clone_dir/skills"/*/; do
-        skill_name="$(basename "$skill_dir")"
-        cp -R "$skill_dir" "$copilot_skills/$skill_name"
-      done
+      copy_relevant_skills "$clone_dir/skills" "$copilot_skills"
       # Inject inclusion:manual into every SKILL.md
       while IFS= read -r -d '' skill_file; do
-        if ! head -1 "$skill_file" | grep -q "^---"; then
-          local tmp_file
-          tmp_file="$(mktemp)"
-          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
-          mv "$tmp_file" "$skill_file"
-        elif ! grep -q "inclusion:" "$skill_file"; then
-          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
-            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
-        fi
+        inject_inclusion_manual "$skill_file"
       done < <(find "$copilot_skills" -name "SKILL.md" -print0)
       info "Copied Superpowers skills to $copilot_skills/ (inclusion: manual — Kiro-safe)"
       info "Skills are also available at ~/.agents/skills/superpowers/ for CLI use"
@@ -581,13 +633,21 @@ echo "╚═══════════════════════�
 detect_ide
 info "Detected IDE: $IDE"
 
-remove_stale_entrypoints
-download_aidlc
-install_aidlc
-install_extensions
-install_superpowers
-install_extension_skills
-install_mcp_config
+if $UPDATE_ONLY; then
+  section "Update mode — re-pulling upstreams only"
+  download_aidlc
+  install_aidlc
+  install_superpowers
+  info "Upstreams updated. Extensions and MCP config unchanged."
+else
+  download_aidlc
+  install_aidlc
+  install_extensions
+  install_superpowers
+  install_extension_skills
+  install_mcp_config
+  remove_stale_entrypoints
+fi
 
 echo
 echo "╔══════════════════════════════════════════════════════╗"

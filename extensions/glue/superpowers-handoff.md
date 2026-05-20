@@ -30,7 +30,7 @@ implementation code yourself.
 **Mandatory steps:**
 
 1. Resolve your skills directory using GLUE-05 (path resolution order)
-2. Read the `using-superpowers` skill from that directory
+2. Read the `using-superpowers` skill from that directory — this is ALWAYS the first skill you read; it establishes how to find and invoke all other skills
 3. Read the `subagent-driven-development` skill from that directory
 4. Follow it exactly — AIDLC owns the plan content, story traceability, and
    approval gates; Superpowers owns execution mechanics (fresh subagent per task,
@@ -170,10 +170,10 @@ If it contains a `REQUIRED SUB-SKILL` directive, invoke that skill immediately.
 Resolve the skills directory in this order. Use the first path that exists and
 contains skill subdirectories.
 
-1. `.github/skills/` — GitHub Copilot (VS Code), committed to repo
-2. `.kiro/steering/superpowers-skills/` — Kiro IDE
-3. `.amazonq/rules/superpowers-skills/` — Amazon Q
-4. `.claude/skills/` — Claude Code
+1. `.kiro/steering/superpowers-skills/` — Kiro IDE
+2. `.amazonq/rules/superpowers-skills/` — Amazon Q
+3. `.claude/skills/` — Claude Code
+4. `.github/skills/` — GitHub Copilot (VS Code), committed to repo
 5. `~/.agents/skills/superpowers/` — global symlink, all IDEs
 6. `~/.codex/superpowers/skills/` — direct clone path
 

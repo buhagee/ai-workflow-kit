@@ -65,7 +65,9 @@ To add a custom skill for all IDEs, add it under `extensions/skills/`.
 ./setup.sh --ide cursor   # kiro | amazonq | cursor | cline | claudecode | copilot | codex
 ```
 
-Then start any workflow:
+> **Windows users:** `setup.sh` requires bash. Use Git Bash, WSL, or run inside a
+> Docker container (`docker run --rm -v $(pwd):/repo -w /repo ubuntu:22.04 bash setup.sh`).
+> Native PowerShell is not supported.
 
 ```
 Using AI-DLC, build a user authentication system
@@ -208,10 +210,20 @@ skills at any time.
 ### GitHub Copilot / VS Code — Skills Discovery
 
 VS Code Copilot auto-discovers skills from `.github/skills/<skill-name>/SKILL.md`.
-`setup.sh --ide copilot` copies all 14 Superpowers skills there automatically.
+`setup.sh --ide copilot` copies all 10 relevant Superpowers skills there automatically (4 are excluded as redundant with AIDLC — see below).
 
 After running setup, open VS Code and type `/` in Copilot Chat — you should see
-all skills listed (brainstorming, systematic-debugging, subagent-driven-development, etc.).
+the relevant skills listed (systematic-debugging, subagent-driven-development,
+test-driven-development, verification-before-completion, etc.).
+
+**Skills excluded when AIDLC is the planning layer** (to avoid confusion):
+
+| Skill | Why excluded |
+|---|---|
+| `brainstorming` | AIDLC Inception phase covers requirements + design |
+| `writing-plans` | AIDLC Code Generation Part 1 is the plan stage |
+| `executing-plans` | Fallback for no-subagent platforms; AIDLC uses `subagent-driven-development` |
+| `writing-skills` | Meta-skill for Superpowers contributors, not end users |
 
 To update skills after a Superpowers upstream update:
 ```bash
