@@ -76,6 +76,10 @@ Using AI-DLC, build a user authentication system
 The agent handles the rest — requirements, design, planning, subagent execution,
 code review, and optionally Jira/Confluence sync.
 
+**New to this repo?** See [docs/ONBOARDING.md](docs/ONBOARDING.md) for a
+step-by-step guide covering prerequisites, IDE setup, credential configuration,
+and day-to-day usage.
+
 ## How it works
 
 ### Planning layer (AIDLC)
@@ -117,7 +121,7 @@ full setup instructions.
 **Short version:**
 
 1. Install the MCP server: `uvx mcp-atlassian` (or use the official Atlassian remote MCP)
-2. Set env vars: `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`
+2. Copy `.env.example` to `.env` and fill in `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN` (and Confluence equivalents)
 3. Run `./setup.sh --with-jira --with-confluence`
 4. At workflow start, answer the opt-in questions
 
@@ -160,6 +164,7 @@ and Confluence examples for the format.
 ```
 .
 ├── setup.sh                          ← run this first
+├── .env.example                      ← copy to .env, add your credentials
 ├── README.md
 │
 ├── extensions/                       ← the only thing you maintain
@@ -167,7 +172,7 @@ and Confluence examples for the format.
 │   │   ├── superpowers-handoff.md    ← AIDLC→Superpowers handoff rules
 │   │   └── entry-point-preamble.md  ← prepended to every IDE entry point
 │   ├── skills/
-│   │   └── coordinating-agent/      ← add your own custom skills here
+│   │   └── <your-skill>/            ← add team-specific custom skills here
 │   │       └── SKILL.md
 │   ├── integrations/
 │   │   ├── jira/
@@ -182,6 +187,7 @@ and Confluence examples for the format.
 │       └── README.md                 ← add your team's rules here
 │
 └── docs/
+    ├── ONBOARDING.md                 ← start here if you're new to this repo
     └── WORKING-WITH-INTEGRATIONS.md
 ```
 

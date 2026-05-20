@@ -579,6 +579,55 @@ trap cleanup EXIT
 remove_stale_entrypoints() {
   section "Removing stale entry-point files for other IDEs"
 
+  # ── Mid-workflow IDE switch warning ─────────────────────────────────────────
+  # If aidlc-docs/aidlc-state.md exists, a workflow is in progress.
+  # Switching IDEs is safe (aidlc-docs/ is never touched), but the agent needs
+  # to be told to re-read the state file after the switch.
+  if [[ -f "aidlc-docs/aidlc-state.md" ]]; then
+    # Detect whether any OTHER IDE's entry point currently exists on disk
+    # (i.e. this is actually a switch, not just a re-install for the same IDE)
+    local other_ide_found=false
+    local other_ide_name=""
+    local switch_checks=(
+      "kiro:.kiro/steering/aidlc-workflow.md"
+      "amazonq:.amazonq/rules/aws-aidlc-rules"
+      "cursor:.cursor/rules/ai-dlc-workflow.mdc"
+      "cline:.clinerules/core-workflow.md"
+      "claudecode:CLAUDE.md"
+      "copilot:.github/copilot-instructions.md"
+      "codex:AGENTS.md"
+    )
+    for entry in "${switch_checks[@]}"; do
+      local owner="${entry%%:*}"
+      local path="${entry#*:}"
+      if [[ "$owner" != "$IDE" && -e "$path" ]]; then
+        other_ide_found=true
+        other_ide_name="$owner"
+        break
+      fi
+    done
+
+    if $other_ide_found; then
+      echo
+      echo "  ⚠ ─────────────────────────────────────────────────────────────"
+      echo "  ⚠  MID-WORKFLOW IDE SWITCH DETECTED"
+      echo "  ⚠"
+      echo "  ⚠  A workflow is in progress (aidlc-docs/aidlc-state.md exists)"
+      echo "  ⚠  and you are switching from '$other_ide_name' to '$IDE'."
+      echo "  ⚠"
+      echo "  ⚠  Your planning artifacts in aidlc-docs/ are safe — they will"
+      echo "  ⚠  not be modified. However, after setup completes you MUST"
+      echo "  ⚠  tell the agent to resume the workflow:"
+      echo "  ⚠"
+      echo "  ⚠    'Using AI-DLC, continue work on <your feature>'"
+      echo "  ⚠"
+      echo "  ⚠  The agent will read aidlc-docs/aidlc-state.md and pick up"
+      echo "  ⚠  from the last checkpoint. Do NOT start a new workflow."
+      echo "  ⚠ ─────────────────────────────────────────────────────────────"
+      echo
+    fi
+  fi
+
   # Map: IDE → its entry-point file/dir (the one we DO NOT remove for $IDE)
   # Format: "ide:path_to_remove"
   # Each entry is "owner:path". Only paths whose owner != $IDE are removed.

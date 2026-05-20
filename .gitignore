@@ -51,6 +51,11 @@ CLAUDE.md
 # Project-specific AIDLC docs — not part of this template repo
 aidlc-docs/
 
+# ── Credentials — never commit secrets ───────────────────────────────────────
+# Copy .env.example to .env and fill in your values.
+# .env.example IS committed (no real values). .env is NOT.
+.env
+
 # ── MCP configs may contain secrets — manage per-developer ───────────────────
 .cursor/mcp.json
 mcp.json

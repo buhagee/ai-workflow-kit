@@ -42,6 +42,10 @@ Or use the official Atlassian remote MCP (no local install):
 
 ### 2. Set environment variables
 
+Copy `.env.example` to `.env` and fill in your values — or export them directly
+in your shell profile. See `.env.example` for all options including direnv,
+IDE secret store, and secrets manager approaches.
+
 ```bash
 # For community server (sooperset/mcp-atlassian)
 export JIRA_URL="https://your-org.atlassian.net"
@@ -53,6 +57,9 @@ export CONFLUENCE_API_TOKEN="your-api-token"   # same token works for both
 ```
 
 Get your API token at: https://id.atlassian.com/manage-profile/security/api-tokens
+
+**Never commit `.env` to version control** — it is already in `.gitignore`.
+`.env.example` (no real values) is committed and safe to share.
 
 ### 3. Configure your IDE's MCP settings
 
