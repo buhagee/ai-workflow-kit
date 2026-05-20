@@ -27,6 +27,7 @@ CLAUDE.md
 .github/mcp.json
 
 # Kiro
+.kiro/steering/aidlc-workflow.md
 .kiro/steering/aws-aidlc-rules/
 .kiro/steering/superpowers-skills/
 .kiro/aws-aidlc-rule-details/

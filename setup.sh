@@ -314,7 +314,18 @@ install_extension_skills() {
       for skill_dir in "$ext_skills_dir"/*/; do
         skill_name="$(basename "$skill_dir")"
         cp -R "$skill_dir" "$dest/$skill_name"
-        info "Installed extension skill: $skill_name → $dest/"
+        # Inject inclusion:manual (Kiro also reads .github/skills/)
+        local skill_file="$dest/$skill_name/SKILL.md"
+        if [[ -f "$skill_file" ]] && ! head -1 "$skill_file" | grep -q "^---"; then
+          local tmp_file
+          tmp_file="$(mktemp)"
+          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
+          mv "$tmp_file" "$skill_file"
+        elif [[ -f "$skill_file" ]] && ! grep -q "inclusion:" "$skill_file"; then
+          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
+            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
+        fi
+        info "Installed extension skill: $skill_name → $dest/ (inclusion: manual)"
       done
       ;;
     cursor|cline|codex|*)
@@ -429,6 +440,8 @@ install_superpowers() {
       # path for GitHub Copilot in VS Code (and Copilot CLI / cloud agent).
       # ~/.agents/skills/superpowers/ is one level too deep for auto-discovery;
       # .github/skills/<skill-name>/SKILL.md is the correct layout.
+      # NOTE: Kiro also reads .github/skills/ — inject inclusion:manual so skills
+      # are not auto-loaded when both Kiro and Copilot are used on the same repo.
       local copilot_skills=".github/skills"
       if [[ -d "$copilot_skills" ]]; then
         rm -rf "$copilot_skills"
@@ -438,7 +451,19 @@ install_superpowers() {
         skill_name="$(basename "$skill_dir")"
         cp -R "$skill_dir" "$copilot_skills/$skill_name"
       done
-      info "Copied Superpowers skills to $copilot_skills/ (auto-discovered by VS Code Copilot)"
+      # Inject inclusion:manual into every SKILL.md
+      while IFS= read -r -d '' skill_file; do
+        if ! head -1 "$skill_file" | grep -q "^---"; then
+          local tmp_file
+          tmp_file="$(mktemp)"
+          printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
+          mv "$tmp_file" "$skill_file"
+        elif ! grep -q "inclusion:" "$skill_file"; then
+          sed -i 's/^---$/inclusion: manual\n---/' "$skill_file" 2>/dev/null \
+            || perl -i -0pe 's/(---\n)/---\ninclusion: manual\n/s' "$skill_file"
+        fi
+      done < <(find "$copilot_skills" -name "SKILL.md" -print0)
+      info "Copied Superpowers skills to $copilot_skills/ (inclusion: manual — Kiro-safe)"
       info "Skills are also available at ~/.agents/skills/superpowers/ for CLI use"
       ;;
   esac
