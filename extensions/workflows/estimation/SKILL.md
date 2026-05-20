@@ -460,6 +460,22 @@ work is fully embedded in planning (tech lead involvement throughout), collapse
 both rows into "Discovery and planning" and note this in the table. Do not leave
 the architecture row blank without explanation.
 
+**Required sections by project size:**
+
+| Section | Micro | Small | Medium | Large |
+|---|---|---|---|---|
+| Executive Summary | yes | yes | yes | yes |
+| Scope Included / Excluded | yes | yes | yes | yes |
+| Effort Breakdown table | yes | yes | yes | yes |
+| Team and Roles | no | optional | yes | yes |
+| Timeline | no | optional | yes | yes |
+| Key Assumptions | yes | yes | yes | yes |
+| Risks and Mitigations | no | optional | yes | yes |
+| What Happens Next | yes | yes | yes | yes |
+
+For Micro and Small projects, omitted sections may be replaced with a brief
+inline note (e.g. "Timeline: estimated 1-2 days, single developer").
+
 ---
 
 ## Output Format
@@ -540,7 +556,13 @@ Produce the estimate in two parts:
 | Project management and meetings | X | X | X |
 | Documentation | X | X | X |
 | Developer support window | X | X | X |
-| **Total** | **L hrs** | **M hrs** | **H hrs** |
+| **Subtotal** | **Xh** | **Xh** | **Xh** |
+| **Contingency ([X]%)** | +Xh | +Xh | +Xh |
+| **Total** | **Lh** | **Mh** | **Hh** |
+
+> Note: per-row hours are the same across all three scenarios — the work
+> estimate does not change. Only the contingency buffer (0.5x / 1x / 1.5x)
+> and the total differ between scenarios.
 
 *Low = optimistic (scope locked, assumptions hold)*
 *Median = base estimate (recommended)*
@@ -597,6 +619,10 @@ Recommended,[Low/Median/High],"[one sentence reason]"
 **CRITICAL**: The subtotal row is the same number in all three scenarios.
 Only the contingency percentage changes (0.5× / 1× / 1.5× the contingency rate).
 Do NOT use different subtotals per scenario — that produces a nonsensical range.
+
+**CSV encoding**: Use plain ASCII only in CSV files. Do NOT use em dashes (—), curly
+quotes (" "), or any Unicode characters. Replace em dashes with a plain hyphen (-).
+Excel opens CSV files without UTF-8 detection and will corrupt any non-ASCII characters.
 
 Announce all saved paths to the user.
 
