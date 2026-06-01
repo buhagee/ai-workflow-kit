@@ -17,6 +17,7 @@ set -euo pipefail
 AIDLC_REPO="https://github.com/awslabs/aidlc-workflows"
 AIDLC_VERSION="latest"   # set to a tag like "v1.2.0" to pin
 SUPERPOWERS_REPO="https://github.com/obra/superpowers"
+CAVEMAN_REPO="https://github.com/JuliusBrussee/caveman"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTENSIONS_DIR="$SCRIPT_DIR/extensions"
@@ -608,6 +609,70 @@ install_superpowers() {
   info "To update later: cd $clone_dir && git pull"
 }
 
+# ── Install Caveman skill from upstream ──────────────────────────────────────
+# Source: JuliusBrussee/caveman (cloned to ~/.codex/caveman)
+# The skill lives at skills/caveman/SKILL.md in that repo.
+install_caveman() {
+  section "Installing Caveman skill (JuliusBrussee/caveman)"
+  require git "Install git: https://git-scm.com"
+
+  local home_dir="$HOME"
+  local clone_dir="$home_dir/.codex/caveman"
+
+  # Clone or update
+  if [[ -d "$clone_dir/.git" ]]; then
+    info "Caveman already cloned at $clone_dir — pulling latest"
+    git -C "$clone_dir" pull --quiet || warn "Could not pull latest Caveman (network issue?) — using existing clone"
+  else
+    info "Cloning JuliusBrussee/caveman to $clone_dir"
+    git clone --quiet --depth=1 "$CAVEMAN_REPO" "$clone_dir"
+  fi
+
+  local skill_src="$clone_dir/skills/caveman"
+  [[ -f "$skill_src/SKILL.md" ]] || { warn "Caveman SKILL.md not found at $skill_src — repo structure may have changed"; return 0; }
+
+  case "$IDE" in
+    kiro)
+      local dest=".kiro/steering/superpowers-skills/caveman"
+      rm -rf "$dest"
+      cp -R "$skill_src" "$dest"
+      inject_inclusion_manual "$dest/SKILL.md"
+      info "Installed caveman skill → $dest (inclusion: manual)"
+      ;;
+    amazonq)
+      local dest=".amazonq/rules/superpowers-skills/caveman"
+      rm -rf "$dest"
+      cp -R "$skill_src" "$dest"
+      info "Installed caveman skill → $dest"
+      ;;
+    claudecode)
+      local dest=".claude/skills/caveman"
+      rm -rf "$dest"
+      cp -R "$skill_src" "$dest"
+      info "Installed caveman skill → $dest"
+      ;;
+    copilot)
+      local dest=".github/skills/caveman"
+      rm -rf "$dest"
+      cp -R "$skill_src" "$dest"
+      inject_inclusion_manual "$dest/SKILL.md"
+      info "Installed caveman skill → $dest (inclusion: manual)"
+      ;;
+    cursor|cline|codex|*)
+      local global_skills="$home_dir/.agents/skills/superpowers"
+      if [[ -d "$global_skills" || -L "$global_skills" ]]; then
+        local real_skills
+        real_skills="$(readlink -f "$global_skills" 2>/dev/null || echo "$global_skills")"
+        rm -rf "$real_skills/caveman"
+        cp -R "$skill_src" "$real_skills/caveman"
+        info "Installed caveman skill → $real_skills/caveman"
+      else
+        warn "Global skills directory not found — caveman skill not installed for $IDE"
+      fi
+      ;;
+  esac
+}
+
 # ── MCP Config Merge ──────────────────────────────────────────────────────────
 install_mcp_config() {
   if ! $WITH_JIRA && ! $WITH_CONFLUENCE; then return; fi
@@ -772,6 +837,7 @@ if $UPDATE_ONLY; then
   install_aidlc
   install_superpowers
   install_workflow_skills
+  install_caveman
   info "Upstreams updated. Extensions and MCP config unchanged."
 else
   download_aidlc
@@ -780,6 +846,7 @@ else
   install_superpowers
   install_extension_skills
   install_workflow_skills
+  install_caveman
   install_mcp_config
   remove_stale_entrypoints
 fi
