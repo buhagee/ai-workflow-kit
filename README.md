@@ -80,6 +80,80 @@ code review, and optionally Jira/Confluence sync.
 step-by-step guide covering prerequisites, IDE setup, credential configuration,
 and day-to-day usage.
 
+## Day-to-day usage
+
+### Starting an AIDLC development session
+
+Prefix your request with `Using AI-DLC` to trigger the full planning workflow:
+
+```
+Using AI-DLC, build a REST API for user authentication with JWT tokens
+Using AI-DLC, add dark mode support to the settings page
+Using AI-DLC, refactor the payment service to use the new Stripe SDK
+```
+
+To resume a session that was interrupted:
+
+```
+Using AI-DLC, continue work on the authentication feature
+```
+
+The agent reads `aidlc-docs/aidlc-state.md` and picks up from the last checkpoint.
+
+### Invoking skills on demand
+
+Skills are invoked by describing what you want in plain language — the agent
+recognises the trigger phrases and loads the skill automatically.
+
+#### Caveman mode — ultra-compressed responses ([upstream](https://github.com/JuliusBrussee/caveman))
+
+Cuts response verbosity ~75% while keeping full technical accuracy. Useful when
+you want fast, dense answers without filler.
+
+```
+caveman mode
+/caveman
+use caveman
+```
+
+Switch intensity:
+
+```
+/caveman lite    # professional but tight — keeps full sentences
+/caveman full    # classic caveman (default)
+/caveman ultra   # maximum compression — arrows for causality, abbreviations
+```
+
+Turn off: `stop caveman` or `normal mode`
+
+#### Estimation workflow
+
+Produces a billable-hours estimate from a plain description or from AIDLC
+units-of-work artifacts generated during Inception.
+
+```
+Using the agent-estimation skill, estimate the effort for:
+[your project description]
+```
+
+See [extensions/workflows/estimation/how-to-use.md](extensions/workflows/estimation/how-to-use.md)
+for full options including post-Inception mode (higher accuracy).
+
+#### Other Superpowers skills
+
+These activate automatically when the context matches, or can be invoked explicitly:
+
+| Skill | When it activates |
+|---|---|
+| `test-driven-development` | Any feature or bugfix implementation |
+| `systematic-debugging` | Any bug, test failure, or unexpected behaviour |
+| `subagent-driven-development` | Executing implementation plans with parallel tasks |
+| `verification-before-completion` | Before claiming work is complete or tests pass |
+| `requesting-code-review` | After completing a feature or before merging |
+| `receiving-code-review` | When acting on code review feedback |
+| `finishing-a-development-branch` | When implementation is complete and ready to integrate |
+| `dispatching-parallel-agents` | When 2+ independent tasks can run in parallel |
+
 ## How it works
 
 ### Planning layer (AIDLC)
@@ -112,25 +186,6 @@ by `setup.sh`.
 - **Glue** (`extensions/glue/`) — always active, enforces the AIDLC→Superpowers handoff
 - **Integrations** (`extensions/integrations/`) — opt-in at workflow start
 - **Org standards** (`extensions/org-standards/`) — always active, add your own rules here
-
-## Workflow extensions
-
-Standalone AI-assisted workflows you can run independently of the main AIDLC
-development loop. They are installed as skills by `setup.sh` and invoked on demand.
-
-### Estimation
-
-Produces a round-based effort estimate from either a plain project description
-or AIDLC units-of-work artifacts. Works pre-project (no AIDLC run needed) or
-post-Inception (uses the approved decomposition for higher accuracy).
-
-```
-Using the agent-estimation skill, estimate the effort for:
-[your project description]
-```
-
-See [extensions/workflows/estimation/how-to-use.md](extensions/workflows/estimation/how-to-use.md)
-for full invocation options, input modes, and output format.
 
 ## Jira / Confluence integration
 
