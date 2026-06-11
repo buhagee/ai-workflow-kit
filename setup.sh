@@ -4,8 +4,8 @@
 # Usage:
 #   ./setup.sh                        # detect IDE, install both layers
 #   ./setup.sh --ide cursor           # force a specific IDE
-#   ./setup.sh --with-jira            # include Jira MCP config
-#   ./setup.sh --with-confluence      # include Confluence MCP config
+#   ./setup.sh --with-jira            # include Jira sync rules + Atlassian MCP config
+#   ./setup.sh --with-confluence      # include Confluence sync rules + Atlassian MCP config
 #   ./setup.sh --with-jira --with-confluence
 #   ./setup.sh --update               # re-pull upstreams, keep extensions
 #
@@ -707,8 +707,8 @@ out = {'mcpServers': data['mcpServers']}
 print(json.dumps(out, indent=2))
 " > "$mcp_config_path" 2>/dev/null \
       || cp "$mcp_snippet" "$mcp_config_path"
-    info "Created $mcp_config_path with Atlassian MCP server config"
-    info "Set environment variables: JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN"
+    info "Created $mcp_config_path with Atlassian remote MCP config"
+    info "Set environment variable: ATLASSIAN_API_TOKEN"
     info "See docs/WORKING-WITH-INTEGRATIONS.md for full setup instructions"
   fi
 }

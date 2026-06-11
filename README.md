@@ -194,13 +194,14 @@ full setup instructions.
 
 **Short version:**
 
-1. Install the MCP server: `uvx mcp-atlassian` (or use the official Atlassian remote MCP)
-2. Copy `.env.example` to `.env` and fill in `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN` (and Confluence equivalents)
+1. Create an Atlassian API token for your Atlassian Cloud account
+2. Copy `.env.example` to `.env` and fill in `ATLASSIAN_API_TOKEN`
 3. Run `./setup.sh --with-jira --with-confluence`
 4. At workflow start, answer the opt-in questions
 
-The agent will then create Epics, Stories, and sub-tasks in Jira and publish
-design artifacts to Confluence as the workflow progresses.
+The agent will then use Atlassian's official remote MCP to create Epics,
+Stories, and sub-tasks in Jira and publish design artifacts to Confluence as
+the workflow progresses.
 
 ## Updating upstreams
 

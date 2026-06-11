@@ -115,16 +115,11 @@ cp .env.example .env
 
 Get your API token at: https://id.atlassian.com/manage-profile/security/api-tokens
 
-Then load the variables in your shell. The simplest approach — add to your
+Then load the variable in your shell. The simplest approach — add to your
 `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-export JIRA_URL="https://your-org.atlassian.net"
-export JIRA_USERNAME="your-email@example.com"
-export JIRA_API_TOKEN="your-api-token-here"
-export CONFLUENCE_URL="https://your-org.atlassian.net/wiki"
-export CONFLUENCE_USERNAME="your-email@example.com"
-export CONFLUENCE_API_TOKEN="your-api-token-here"
+export ATLASSIAN_API_TOKEN="your-api-token-here"
 ```
 
 See `.env.example` for alternative approaches (direnv, IDE secret store,
@@ -299,9 +294,9 @@ For Copilot: type `/` in Copilot Chat to see available skills.
 For other IDEs: check `~/.agents/skills/superpowers/` exists and is not empty.
 
 **Jira/Confluence MCP not connecting**
-Run `uvx mcp-atlassian --help` to verify the server is installed.
-Check your env vars are exported in the shell your IDE uses (not just your
-terminal). See `docs/WORKING-WITH-INTEGRATIONS.md` for full troubleshooting.
+Check your IDE generated MCP config file and confirm `ATLASSIAN_API_TOKEN` is
+available to the IDE process (not just your terminal). See
+`docs/WORKING-WITH-INTEGRATIONS.md` for full troubleshooting.
 
 **Switching IDEs mid-workflow**
 Re-run `./setup.sh --ide <new-ide>`. Your `aidlc-docs/` artifacts are safe —

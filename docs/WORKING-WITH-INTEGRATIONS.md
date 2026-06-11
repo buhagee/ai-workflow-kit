@@ -27,18 +27,14 @@ Build and Test done           → Jira: transition to Done
 
 ## Prerequisites
 
-### 1. Install the MCP server
+### 1. Use Atlassian's official remote MCP
 
-The integrations use `sooperset/mcp-atlassian` (covers both Jira and Confluence).
+The integrations use Atlassian's official remote MCP for both Jira and
+Confluence.
 
-```bash
-# Requires uv/uvx — install from https://docs.astral.sh/uv/
-uvx mcp-atlassian --help   # verify it works
-```
-
-Or use the official Atlassian remote MCP (no local install):
 - URL: `https://mcp.atlassian.com/v1/sse`
 - Requires an Atlassian API token
+- No local `uv` or `uvx` install required
 
 ### 2. Set environment variables
 
@@ -47,13 +43,7 @@ in your shell profile. See `.env.example` for all options including direnv,
 IDE secret store, and secrets manager approaches.
 
 ```bash
-# For community server (sooperset/mcp-atlassian)
-export JIRA_URL="https://your-org.atlassian.net"
-export JIRA_USERNAME="your-email@example.com"
-export JIRA_API_TOKEN="your-api-token"
-export CONFLUENCE_URL="https://your-org.atlassian.net/wiki"
-export CONFLUENCE_USERNAME="your-email@example.com"
-export CONFLUENCE_API_TOKEN="your-api-token"   # same token works for both
+export ATLASSIAN_API_TOKEN="your-api-token"
 ```
 
 Get your API token at: https://id.atlassian.com/manage-profile/security/api-tokens
@@ -94,8 +84,8 @@ The agent will fetch the ticket context and use it during Requirements Analysis.
 
 ## Troubleshooting
 
-**MCP server not found:** Run `uvx mcp-atlassian --help` to verify installation.
-If uvx is not installed, see https://docs.astral.sh/uv/getting-started/installation/
+**MCP not connecting:** Confirm your IDE loaded the generated MCP config file
+and that `ATLASSIAN_API_TOKEN` is available to the IDE process.
 
 **Authentication errors:** Verify your API token at
 https://id.atlassian.com/manage-profile/security/api-tokens. Tokens expire —

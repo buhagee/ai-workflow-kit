@@ -1,20 +1,11 @@
 {
-  "_comment": "Jira/Confluence MCP server configuration snippet. Merge this into your IDE's MCP config file. See setup.sh for automated merging.",
-  "_options": {
-    "community": "sooperset/mcp-atlassian — covers both Jira and Confluence, 3k+ stars, actively maintained",
-    "official": "atlassian/atlassian-mcp-server — official Atlassian remote MCP, no local install needed"
-  },
+  "_comment": "Jira/Confluence MCP server configuration snippet. This repo defaults to Atlassian's official remote MCP. Merge this into your IDE's MCP config file or let setup.sh generate it.",
   "mcpServers": {
     "atlassian": {
-      "command": "uvx",
-      "args": ["mcp-atlassian"],
-      "env": {
-        "JIRA_URL": "${JIRA_URL}",
-        "JIRA_USERNAME": "${JIRA_USERNAME}",
-        "JIRA_API_TOKEN": "${JIRA_API_TOKEN}",
-        "CONFLUENCE_URL": "${CONFLUENCE_URL}",
-        "CONFLUENCE_USERNAME": "${CONFLUENCE_USERNAME}",
-        "CONFLUENCE_API_TOKEN": "${CONFLUENCE_API_TOKEN}"
+      "type": "http",
+      "url": "https://mcp.atlassian.com/v1/sse",
+      "headers": {
+        "Authorization": "Bearer ${ATLASSIAN_API_TOKEN}"
       },
       "disabled": false,
       "autoApprove": [
@@ -23,17 +14,6 @@
         "confluence_get_page",
         "confluence_search"
       ]
-    }
-  },
-  "_alternative_official": {
-    "mcpServers": {
-      "atlassian-remote": {
-        "type": "http",
-        "url": "https://mcp.atlassian.com/v1/sse",
-        "headers": {
-          "Authorization": "Bearer ${ATLASSIAN_API_TOKEN}"
-        }
-      }
     }
   }
 }
