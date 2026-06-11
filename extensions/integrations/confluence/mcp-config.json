@@ -1,4 +1,0 @@
-{
-  "_comment": "Confluence uses the same official Atlassian remote MCP server as Jira. If you are using both integrations, configure the MCP server once via extensions/integrations/jira/mcp-config.json.",
-  "_reference": "extensions/integrations/jira/mcp-config.json"
-}

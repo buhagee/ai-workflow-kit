@@ -3,8 +3,7 @@
 This extension syncs AI-DLC workflow stages with Jira. When enabled, the agent
 will automatically create and transition Jira issues as the workflow progresses.
 
-**Requires:** `atlassian` MCP server configured (see `mcp-config.json` in this
-directory).
+**Requires:** `atlassian` MCP server configured in your IDE user settings.
 
 ---
 

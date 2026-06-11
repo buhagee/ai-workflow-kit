@@ -194,10 +194,11 @@ full setup instructions.
 
 **Short version:**
 
-1. Create an Atlassian API token for your Atlassian Cloud account
-2. Copy `.env.example` to `.env` and fill in `ATLASSIAN_API_TOKEN`
-3. Run `./setup.sh --with-jira --with-confluence`
-4. At workflow start, answer the opt-in questions
+1. Install Atlassian's MCP server in your IDE or VS Code user MCP settings
+2. Create an Atlassian API token for your Atlassian Cloud account
+3. Make `ATLASSIAN_API_TOKEN` available to your IDE process
+4. Run `./setup.sh --with-jira --with-confluence`
+5. At workflow start, answer the opt-in questions
 
 The agent will then use Atlassian's official remote MCP to create Epics,
 Stories, and sub-tasks in Jira and publish design artifacts to Confluence as
@@ -256,12 +257,10 @@ and Confluence examples for the format.
 │   ├── integrations/
 │   │   ├── jira/
 │   │   │   ├── jira-sync.md          ← Jira sync rules (active when opted in)
-│   │   │   ├── jira-sync.opt-in.md   ← opt-in prompt shown at workflow start
-│   │   │   └── mcp-config.json       ← MCP server config snippet
+│   │   │   └── jira-sync.opt-in.md   ← opt-in prompt shown at workflow start
 │   │   └── confluence/
 │   │       ├── confluence-sync.md
-│   │       ├── confluence-sync.opt-in.md
-│   │       └── mcp-config.json
+│   │       └── confluence-sync.opt-in.md
 │   └── org-standards/
 │       └── README.md                 ← add your team's rules here
 │

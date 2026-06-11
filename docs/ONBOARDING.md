@@ -87,7 +87,7 @@ cd <repo-name>
 ./setup.sh --ide codex         # Codex / generic AGENTS.md
 ```
 
-With Jira/Confluence (if your team uses them):
+With Jira/Confluence rules enabled (if your team uses them):
 
 ```bash
 ./setup.sh --ide kiro --with-jira --with-confluence
@@ -104,9 +104,23 @@ again after `git pull` if the team has updated extensions.
 
 ---
 
-## Step 4 — Set up credentials (if using Jira/Confluence)
+## Step 4 — Set up Atlassian MCP separately (if using Jira/Confluence)
 
-Copy the example env file and fill in your values:
+Install Atlassian's official MCP server directly in your IDE user settings.
+This repository no longer writes MCP config into project files.
+
+For VS Code / Copilot, the user-level config is typically:
+- Windows: `%APPDATA%/Code/User/mcp.json`
+- macOS: `~/Library/Application Support/Code/User/mcp.json`
+- Linux: `~/.config/Code/User/mcp.json`
+
+Use Atlassian's official remote MCP endpoint:
+- URL: `https://mcp.atlassian.com/v1/sse`
+- Header: `Authorization: Bearer ${ATLASSIAN_API_TOKEN}`
+
+Then make the token available to your IDE process.
+
+Copy the example env file and fill in your values if you want a local reference:
 
 ```bash
 cp .env.example .env
@@ -294,7 +308,7 @@ For Copilot: type `/` in Copilot Chat to see available skills.
 For other IDEs: check `~/.agents/skills/superpowers/` exists and is not empty.
 
 **Jira/Confluence MCP not connecting**
-Check your IDE generated MCP config file and confirm `ATLASSIAN_API_TOKEN` is
+Check your IDE user-level MCP config and confirm `ATLASSIAN_API_TOKEN` is
 available to the IDE process (not just your terminal). See
 `docs/WORKING-WITH-INTEGRATIONS.md` for full troubleshooting.
 

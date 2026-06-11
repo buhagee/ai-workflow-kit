@@ -14,12 +14,13 @@ external service (payment processors, email providers, cloud APIs, databases,
 version control, etc.), check which MCP servers are configured and available.
 
 **How to check:**
-1. Look for MCP config files in this order:
-   - `.kiro/settings/mcp.json`
-   - `.github/mcp.json`
-   - `.cursor/mcp.json`
-   - `.claude/settings/mcp.json`
-   - `mcp.json` (workspace root)
+1. Look for MCP config in this order:
+  - IDE user-level MCP settings (for VS Code/Copilot this is typically `%APPDATA%/Code/User/mcp.json` on Windows, `~/Library/Application Support/Code/User/mcp.json` on macOS, `~/.config/Code/User/mcp.json` on Linux)
+  - `.kiro/settings/mcp.json`
+  - `.github/mcp.json`
+  - `.cursor/mcp.json`
+  - `.claude/settings/mcp.json`
+  - `mcp.json` (workspace root)
 2. List the configured `mcpServers` keys
 3. For each external service the feature requires, determine whether a matching
    MCP server is configured
@@ -29,7 +30,7 @@ version control, etc.), check which MCP servers are configured and available.
 - Include a fallback approach in the NFR Requirements (SDK, direct HTTP, mock)
 - Do NOT plan the feature assuming MCP availability — plan for the fallback
 - Inform the user: "The [service] MCP server is not configured. I'll plan using
-  the [SDK/HTTP] approach. To use MCP instead, add the server config and re-run."
+  the [SDK/HTTP] approach. To use MCP instead, add the server in your IDE MCP settings and re-run."
 
 ---
 

@@ -4,8 +4,8 @@
 # Usage:
 #   ./setup.sh                        # detect IDE, install both layers
 #   ./setup.sh --ide cursor           # force a specific IDE
-#   ./setup.sh --with-jira            # include Jira sync rules + Atlassian MCP config
-#   ./setup.sh --with-confluence      # include Confluence sync rules + Atlassian MCP config
+#   ./setup.sh --with-jira            # include Jira sync rules
+#   ./setup.sh --with-confluence      # include Confluence sync rules
 #   ./setup.sh --with-jira --with-confluence
 #   ./setup.sh --update               # re-pull upstreams, keep extensions
 #
@@ -673,46 +673,6 @@ install_caveman() {
   esac
 }
 
-# ── MCP Config Merge ──────────────────────────────────────────────────────────
-install_mcp_config() {
-  if ! $WITH_JIRA && ! $WITH_CONFLUENCE; then return; fi
-
-  section "Configuring Atlassian MCP server"
-
-  # Determine IDE MCP config path
-  local mcp_config_path
-  case "$IDE" in
-    kiro)       mcp_config_path=".kiro/settings/mcp.json" ;;
-    claudecode) mcp_config_path=".claude/settings/mcp.json" ;;
-    cursor)     mcp_config_path=".cursor/mcp.json" ;;
-    copilot)    mcp_config_path=".github/mcp.json" ;;
-    *)          mcp_config_path="mcp.json" ;;
-  esac
-
-  local mcp_snippet="$EXTENSIONS_DIR/integrations/jira/mcp-config.json"
-
-  if [[ -f "$mcp_config_path" ]]; then
-    warn "MCP config already exists at $mcp_config_path"
-    warn "Manually merge the Atlassian server entry from:"
-    warn "  $mcp_snippet"
-    warn "into $mcp_config_path"
-  else
-    mkdir -p "$(dirname "$mcp_config_path")"
-    # Extract just the mcpServers block from the snippet
-    python3 -c "
-import json, sys
-with open('$mcp_snippet') as f:
-    data = json.load(f)
-out = {'mcpServers': data['mcpServers']}
-print(json.dumps(out, indent=2))
-" > "$mcp_config_path" 2>/dev/null \
-      || cp "$mcp_snippet" "$mcp_config_path"
-    info "Created $mcp_config_path with Atlassian remote MCP config"
-    info "Set environment variable: ATLASSIAN_API_TOKEN"
-    info "See docs/WORKING-WITH-INTEGRATIONS.md for full setup instructions"
-  fi
-}
-
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 cleanup() {
   rm -rf "$TMPDIR_WORK"
@@ -838,7 +798,7 @@ if $UPDATE_ONLY; then
   install_superpowers
   install_workflow_skills
   install_caveman
-  info "Upstreams updated. Extensions and MCP config unchanged."
+  info "Upstreams updated. Extensions unchanged."
 else
   download_aidlc
   install_aidlc
@@ -847,7 +807,6 @@ else
   install_extension_skills
   install_workflow_skills
   install_caveman
-  install_mcp_config
   remove_stale_entrypoints
 fi
 
@@ -863,7 +822,7 @@ echo
 echo "  Start a workflow: 'Using AI-DLC, [describe your task]'"
 echo
 if $WITH_JIRA || $WITH_CONFLUENCE; then
-  echo "  Atlassian MCP:    configure env vars, see docs/WORKING-WITH-INTEGRATIONS.md"
+  echo "  Atlassian MCP:    install in your IDE user settings, see docs/WORKING-WITH-INTEGRATIONS.md"
   echo
 fi
 echo "  To update upstreams: ./setup.sh --update"

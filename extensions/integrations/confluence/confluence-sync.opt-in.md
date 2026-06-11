@@ -4,8 +4,7 @@ This extension publishes AI-DLC workflow artifacts to Confluence. When enabled,
 the agent will automatically create and update Confluence pages as the workflow
 progresses.
 
-**Requires:** `atlassian` MCP server configured (see `mcp-config.json` in this
-directory).
+**Requires:** `atlassian` MCP server configured in your IDE user settings.
 
 ---
 

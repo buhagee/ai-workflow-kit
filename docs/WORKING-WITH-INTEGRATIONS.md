@@ -36,11 +36,15 @@ Confluence.
 - Requires an Atlassian API token
 - No local `uv` or `uvx` install required
 
-### 2. Set environment variables
+### 2. Make credentials available to your IDE
 
-Copy `.env.example` to `.env` and fill in your values — or export them directly
-in your shell profile. See `.env.example` for all options including direnv,
-IDE secret store, and secrets manager approaches.
+Copy `.env.example` to `.env` and fill in your values if that helps you manage
+secrets locally, but the important part is making `ATLASSIAN_API_TOKEN`
+available to your IDE process. The Atlassian MCP server does not read this
+repository's `.env` file by itself.
+
+Use whichever approach your IDE supports: VS Code user MCP input/secret store,
+shell profile export, direnv, 1Password/Vault injection, or similar.
 
 ```bash
 export ATLASSIAN_API_TOKEN="your-api-token"
@@ -51,17 +55,20 @@ Get your API token at: https://id.atlassian.com/manage-profile/security/api-toke
 **Never commit `.env` to version control** — it is already in `.gitignore`.
 `.env.example` (no real values) is committed and safe to share.
 
-### 3. Configure your IDE's MCP settings
+### 3. Install Atlassian MCP in your IDE
 
-Run `setup.sh --with-jira` or `setup.sh --with-confluence` to merge the MCP
-config snippet automatically. Or manually merge
-`extensions/integrations/jira/mcp-config.json` into your IDE's MCP config file.
+This repository no longer generates or stores Atlassian MCP config in project
+files. Install Atlassian's official MCP server directly in your IDE's user-level
+MCP settings.
 
-**IDE MCP config locations:**
-- Kiro: `.kiro/settings/mcp.json`
-- Claude Code: `.claude/settings/mcp.json`
-- Cursor: `.cursor/mcp.json`
-- Copilot: `.github/mcp.json`
+For VS Code / Copilot, the user-level config is typically:
+- Windows: `%APPDATA%/Code/User/mcp.json`
+- macOS: `~/Library/Application Support/Code/User/mcp.json`
+- Linux: `~/.config/Code/User/mcp.json`
+
+Use Atlassian's official remote MCP endpoint:
+- URL: `https://mcp.atlassian.com/v1/sse`
+- Header: `Authorization: Bearer ${ATLASSIAN_API_TOKEN}`
 
 ## Using the integrations
 
@@ -84,8 +91,8 @@ The agent will fetch the ticket context and use it during Requirements Analysis.
 
 ## Troubleshooting
 
-**MCP not connecting:** Confirm your IDE loaded the generated MCP config file
-and that `ATLASSIAN_API_TOKEN` is available to the IDE process.
+**MCP not connecting:** Confirm your IDE user-level MCP config includes the
+Atlassian server and that `ATLASSIAN_API_TOKEN` is available to the IDE process.
 
 **Authentication errors:** Verify your API token at
 https://id.atlassian.com/manage-profile/security/api-tokens. Tokens expire —
