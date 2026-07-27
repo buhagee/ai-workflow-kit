@@ -526,6 +526,52 @@ migration_label() {
   printf '%s' "${name:0:24}"
 }
 
+warn_if_migrated_state_incompatible() {
+  local intents_root="$PROJECT_DIR/aidlc/spaces/default/intents"
+  local display_root="${PROJECT_DIR_DISPLAY%/}"
+  local active_pointer="$intents_root/active-intent"
+  local active_intent
+  local state_file
+  local state_display
+
+  if [[ ! -f "$active_pointer" ]]; then
+    warn "Migration completed but no active-intent pointer was found at $display_root/aidlc/spaces/default/intents/active-intent"
+    warn "A follow-up /aidlc continue may fail until the migrated intent is selected."
+    return 0
+  fi
+
+  active_intent="$(head -n 1 "$active_pointer" | tr -d '\r\n')"
+  if [[ -z "$active_intent" ]]; then
+    warn "Migration completed but active-intent pointer is empty: $display_root/aidlc/spaces/default/intents/active-intent"
+    warn "A follow-up /aidlc continue may fail until the active intent is set."
+    return 0
+  fi
+
+  state_file="$intents_root/$active_intent/aidlc-state.md"
+  state_display="$display_root/aidlc/spaces/default/intents/$active_intent/aidlc-state.md"
+  if [[ ! -f "$state_file" ]]; then
+    warn "Migration completed but migrated state file was not found: $state_display"
+    warn "A follow-up /aidlc continue may fail until aidlc-state.md is restored."
+    return 0
+  fi
+
+  if grep -Eq '^- \*\*Current Stage\*\*:' "$state_file"; then
+    info "Migrated intent state passed v2 Current Stage check."
+    return 0
+  fi
+
+  if grep -Eq '^## Current Phase' "$state_file"; then
+    warn "Migrated intent state appears to use legacy schema and is missing v2 field '- **Current Stage**:'."
+  else
+    warn "Migrated intent state is missing required v2 field '- **Current Stage**:'."
+  fi
+  warn "A follow-up /aidlc continue can fail with 'State file has no Current Stage field'."
+  printf '  [warn] Repair options:\n'
+  printf '    1) Restore %s from a known-good v2 commit or backup.\n' "$state_display"
+  printf '    2) Or start a fresh v2 intent in this project with /aidlc "continue implementing <task>".\n'
+  printf '    3) Keep migrated artifacts under %s/ for reference.\n' "$display_root/aidlc/spaces/default/intents/$active_intent"
+}
+
 run_v1_migration() {
   section "Running AI-DLC v1 -> v2 migration"
   local legacy_state="$PROJECT_DIR/aidlc-docs/aidlc-state.md"
@@ -595,6 +641,8 @@ run_v1_migration() {
   else
     warn "Migration command completed but no .migrated marker was found. Review the command output above."
   fi
+
+  warn_if_migrated_state_incompatible
 }
 
 cleanup() { rm -rf "$TMPDIR_WORK"; }

@@ -163,6 +163,9 @@ This command is safe by default: it only migrates when
 If no legacy v1 state exists, it exits with a no-op warning.
 With `--dry-run`, it prints the exact migration command and expected file
 changes without modifying the project.
+After a real migration, it also validates the migrated state schema and warns
+immediately if v2's `- **Current Stage**:` field is missing, with explicit
+repair options.
 
 ## Global vs Project
 

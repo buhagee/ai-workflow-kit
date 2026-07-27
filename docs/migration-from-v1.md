@@ -35,6 +35,12 @@ This path is guarded and safe: it only migrates when
 as a no-op. The dry run previews the exact command and expected file changes
 without writing migration output.
 
+After a real migration, the wrapper now checks whether the migrated
+`aidlc-state.md` includes v2's `- **Current Stage**:` field. If missing, it
+prints a compatibility warning and repair options immediately (restore a known
+good v2 state file for that intent, or start a fresh v2 intent and keep the
+migrated artifacts as reference).
+
 4. Option B — lightweight workflow start: run the kit's `/aidlc` in the project
   (this also triggers migration, but then continues through normal workflow
   orchestration):
