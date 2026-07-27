@@ -427,6 +427,7 @@ install_copilot_hooks() {
 
 install_copilot_global() {
   section "Installing AI-DLC for GitHub Copilot in VS Code"
+  require bun "Install Bun before installing AI-DLC v2 for Copilot (hooks require bun)."
   local distribution="$AIDLC_SOURCE_DIR/dist/claude"
   local runtime="$COPILOT_ROOT/runtime/.claude"
   rm -rf "$COPILOT_ROOT/runtime" "$COPILOT_ROOT/memory-seed" "$COPILOT_ROOT/knowledge"

@@ -42,6 +42,41 @@ Install Bun and Git first. AI-DLC v2 runs natively on Windows; the installer use
 Bash through Git for Windows so the same distribution command works on every team
 machine.
 
+Prerequisites — Bun
+
+Install Bun using the platform installer and verify it's on PATH before running
+the kit. Example commands:
+
+```bash
+# macOS / Linux
+curl -fsSL https://bun.sh/install | bash
+
+# Windows PowerShell
+irm https://bun.sh/install.ps1 | iex
+
+# Windows (CMD)
+powershell -c "irm https://bun.sh/install.ps1 | iex"
+```
+
+Verification
+
+```bash
+which bun        # Git Bash / macOS / Linux
+bun --version
+
+# Or on PowerShell
+Get-Command bun
+bun --version
+```
+
+Windows note: PowerShell may block running downloaded scripts (bun.ps1) via
+ExecutionPolicy. If you encounter ``running scripts is disabled`` errors, either
+run installer in Git Bash/CMD, or allow local signed scripts for current user:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+```
+
 From Git Bash (including Windows):
 
 ```bash
