@@ -20,9 +20,12 @@ COPILOT_ROOT="${AIDLC_COPILOT_ROOT:-$HOME/.copilot/aidlc}"
 PROJECT_DIR="${AIDLC_PROJECT_DIR:-$PWD}"
 PROJECT_DIR_EXPLICIT=false
 [[ -n "${AIDLC_PROJECT_DIR:-}" ]] && PROJECT_DIR_EXPLICIT=true
+PROJECT_DIR_DISPLAY="$PROJECT_DIR"
 IDE="${AIDLC_IDE:-}"
 SKIP_DOCTOR=false
 UPDATE_ONLY=false
+MIGRATE_V1=false
+DRY_RUN=false
 
 info() { printf '  [ok] %s\n' "$*"; }
 warn() { printf '  [warn] %s\n' "$*"; }
@@ -40,12 +43,15 @@ AI-DLC v2 distribution installer
 Usage:
   ./setup.sh --ide <claude|copilot|kiro-ide|kiro-cli|codex|opencode>
   ./setup.sh --update --project-dir <path>
+  ./setup.sh --migrate-v1 --project-dir <path> [--ide <name>] [--dry-run]
 
 Options:
   --ide <name>              Select Claude, Copilot, Kiro, Codex, or opencode.
   --project-dir <path>      Install into a project other than the current directory.
   --skip-doctor             Install without running the harness health check.
   --update                  Reapply the vendored distribution and team overlays.
+  --migrate-v1              Run safe v1->v2 workspace migration only (no install/update).
+  --dry-run                 Preview actions without making changes (for --migrate-v1).
   --help                    Show this help.
 
 Normal setup is offline and never contacts upstream. Maintainers update the
@@ -66,10 +72,19 @@ parse_args() {
       --project-dir) [[ $# -ge 2 ]] || die "--project-dir requires a value"; PROJECT_DIR="$2"; PROJECT_DIR_EXPLICIT=true; shift 2 ;;
       --skip-doctor) SKIP_DOCTOR=true; shift ;;
       --update) UPDATE_ONLY=true; shift ;;
+      --migrate-v1) MIGRATE_V1=true; shift ;;
+      --dry-run) DRY_RUN=true; shift ;;
       --help|-h) usage; exit 0 ;;
       *) die "Unknown option: $1. Use --help for usage." ;;
     esac
   done
+}
+
+is_relative_path() {
+  case "$1" in
+    /*|~*|[A-Za-z]:/*|[A-Za-z]:\\*) return 1 ;;
+    *) return 0 ;;
+  esac
 }
 
 normalise_ide() {
@@ -138,8 +153,14 @@ skills_dir() {
 }
 
 ensure_project() {
+  local requested_project_dir="$PROJECT_DIR"
   [[ -d "$PROJECT_DIR" ]] || die "Project directory does not exist: $PROJECT_DIR"
   PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+  if [[ "$PROJECT_DIR_EXPLICIT" == true ]] && is_relative_path "$requested_project_dir"; then
+    PROJECT_DIR_DISPLAY="$requested_project_dir"
+  else
+    PROJECT_DIR_DISPLAY="$PROJECT_DIR"
+  fi
   if [[ "$IDE" != "copilot" && "$PROJECT_DIR" == "$SCRIPT_DIR" && "$PROJECT_DIR_EXPLICIT" != true ]]; then
     die "The kit cannot install AI-DLC into itself. Run from the target project or pass --project-dir <path>."
   fi
@@ -476,13 +497,140 @@ run_doctor() {
   (cd "$PROJECT_DIR" && bun "$tool_dir" doctor)
 }
 
+detect_migration_ide() {
+  [[ -n "$IDE" ]] && { normalise_ide; return; }
+
+  if [[ -d "$PROJECT_DIR/.claude" ]]; then
+    IDE="claude"
+  elif [[ -d "$PROJECT_DIR/.kiro" ]]; then
+    IDE="kiro-ide"
+  elif [[ -d "$PROJECT_DIR/.codex" ]]; then
+    IDE="codex"
+  elif [[ -d "$PROJECT_DIR/.aidlc" || -d "$PROJECT_DIR/.opencode" ]]; then
+    IDE="opencode"
+  elif [[ -f "$COPILOT_ROOT/aidlc-copilot-runner.ts" ]]; then
+    IDE="copilot"
+  else
+    die "Could not detect a harness for migration. Pass --ide explicitly."
+  fi
+
+  normalise_ide
+}
+
+migration_label() {
+  local name
+  name="$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')"
+  name="${name#-}"
+  name="${name%-}"
+  [[ -n "$name" ]] || name="v1-migrate"
+  printf '%s' "${name:0:24}"
+}
+
+run_v1_migration() {
+  section "Running AI-DLC v1 -> v2 migration"
+  local legacy_state="$PROJECT_DIR/aidlc-docs/aidlc-state.md"
+  local migrated_marker="$PROJECT_DIR/aidlc/.migrated"
+  local display_root="${PROJECT_DIR_DISPLAY%/}"
+  local legacy_state_display="$display_root/aidlc-docs/aidlc-state.md"
+  local migration_project_arg="$PROJECT_DIR"
+
+  if [[ "$PROJECT_DIR_DISPLAY" != "$PROJECT_DIR" ]]; then
+    migration_project_arg="$PROJECT_DIR_DISPLAY"
+  fi
+
+  if [[ ! -f "$legacy_state" ]]; then
+    warn "No legacy v1 state found at $legacy_state_display"
+    warn "Nothing to migrate. This command is a no-op unless aidlc-docs/aidlc-state.md exists."
+    return 0
+  fi
+
+  if [[ -f "$migrated_marker" ]]; then
+    die "Migration marker already exists at $migrated_marker. Refusing --migrate-v1 to avoid accidental new-intent creation."
+  fi
+
+  require bun "Install Bun before running migration."
+  local label
+  label="$(migration_label)"
+
+  local migration_command
+  local runner=""
+  local utility=""
+  if [[ "$IDE" == "copilot" ]]; then
+    runner="$COPILOT_ROOT/aidlc-copilot-runner.ts"
+    [[ -f "$runner" ]] || die "Copilot runtime is not installed at $runner. Run ./setup.sh --ide copilot first."
+    migration_command="bun \"$runner\" tool aidlc-utility.ts intent-birth --project-dir \"$migration_project_arg\" --scope poc --arguments \"migrate v1 workspace\" --label \"$label\""
+  else
+    utility="$PROJECT_DIR/$(harness_dir)/tools/aidlc-utility.ts"
+    [[ -f "$utility" ]] || die "Harness utility not found at $utility. Install this harness first with ./setup.sh --ide $IDE --project-dir $PROJECT_DIR"
+    migration_command="bun \"$utility\" intent-birth --project-dir \"$migration_project_arg\" --scope poc --arguments \"migrate v1 workspace\" --label \"$label\""
+  fi
+
+  if $DRY_RUN; then
+    info "Dry-run mode enabled; no files will be modified."
+    info "Legacy state detected: $legacy_state_display"
+    printf '  [preview] Migration command:\n    %s\n' "$migration_command"
+    printf '  [preview] Expected result:\n'
+    printf '    - Migrate flat aidlc-docs/ into aidlc/spaces/default/intents/<date>-<slug>/\n'
+    printf '    - Write migration marker at aidlc/.migrated\n'
+    printf '    - Preserve migrated record as active intent\n'
+    return 0
+  fi
+
+  if [[ "$IDE" == "copilot" ]]; then
+    bun "$runner" tool aidlc-utility.ts intent-birth \
+      --project-dir "$PROJECT_DIR" \
+      --scope poc \
+      --arguments "migrate v1 workspace" \
+      --label "$label"
+  else
+    bun "$utility" intent-birth \
+      --project-dir "$PROJECT_DIR" \
+      --scope poc \
+      --arguments "migrate v1 workspace" \
+      --label "$label"
+  fi
+
+  if [[ -f "$PROJECT_DIR/aidlc/.migrated" ]]; then
+    info "Migration marker created: $PROJECT_DIR/aidlc/.migrated"
+  else
+    warn "Migration command completed but no .migrated marker was found. Review the command output above."
+  fi
+}
+
 cleanup() { rm -rf "$TMPDIR_WORK"; }
 trap cleanup EXIT
 
 main() {
   parse_args "$@"
-  [[ -n "$IDE" ]] && normalise_ide
+  if $UPDATE_ONLY && $MIGRATE_V1; then
+    die "--update and --migrate-v1 cannot be used together."
+  fi
+  if $DRY_RUN && ! $MIGRATE_V1; then
+    die "--dry-run is currently supported only with --migrate-v1."
+  fi
+
   ensure_project
+
+  if $MIGRATE_V1; then
+    detect_migration_ide
+    info "Selected harness: $IDE"
+    run_v1_migration
+    if $DRY_RUN; then
+      printf '\nAI-DLC v1 migration dry-run complete.\n'
+    else
+      printf '\nAI-DLC v1 migration command complete.\n'
+    fi
+    printf '  Project: %s\n' "$PROJECT_DIR_DISPLAY"
+    printf '  Harness: %s\n' "$IDE"
+    if $DRY_RUN; then
+      printf '  Next: rerun without --dry-run to execute migration.\n'
+    else
+      printf '  Next: run your normal /aidlc workflow in the project to continue.\n'
+    fi
+    return 0
+  fi
+
+  [[ -n "$IDE" ]] && normalise_ide
   detect_ide
   normalise_ide
   info "Selected harness: $IDE"

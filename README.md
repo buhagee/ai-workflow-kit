@@ -150,9 +150,19 @@ When the workflow-kit repository changes, pull the new reviewed revision and
 rerun `./setup.sh --ide copilot`; then reload VS Code so updated skills,
 agents, and hooks are discovered.
 
-For a project migration from AI-DLC v1, create a branch first, open the project,
-and invoke `/aidlc`. AI-DLC v2 migrates the old `aidlc-docs/` layout when the
-workflow starts.
+For a project migration from AI-DLC v1, create a branch first, then run the
+migration-only command from this kit:
+
+```bash
+./setup.sh --migrate-v1 --project-dir ../my-project --ide copilot --dry-run
+./setup.sh --migrate-v1 --project-dir ../my-project --ide copilot
+```
+
+This command is safe by default: it only migrates when
+`aidlc-docs/aidlc-state.md` exists. It does not run a full `/aidlc` stage flow.
+If no legacy v1 state exists, it exits with a no-op warning.
+With `--dry-run`, it prints the exact migration command and expected file
+changes without modifying the project.
 
 ## Global vs Project
 
