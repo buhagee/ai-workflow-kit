@@ -82,88 +82,96 @@ async function blockWhileGateIsOpen(): Promise<boolean> {
   }
 }
 
-if (target === "session-start") {
-  const code = runCore("aidlc-session-start.ts", { hook_event_name: "SessionStart", source: "startup" });
-  process.exit(code);
-}
+async function main() {
+  if (target === "session-start") {
+    const code = runCore("aidlc-session-start.ts", { hook_event_name: "SessionStart", source: "startup" });
+    process.exit(code);
+  }
 
-if (target === "mint") {
-  process.exit(runCore("aidlc-mint-presence.ts", { hook_event_name: "UserPromptSubmit" }));
-}
+  if (target === "mint") {
+    process.exit(runCore("aidlc-mint-presence.ts", { hook_event_name: "UserPromptSubmit" }));
+  }
 
-if (target === "pretool") {
-  const tool = canonicalTool(stringValue(input.tool_name));
-  if (!tool) {
+  if (target === "pretool") {
+    const tool = canonicalTool(stringValue(input.tool_name));
+    if (!tool) {
+      process.exit(0);
+      return;
+    }
+    const guardCode = runCore("aidlc-state-transition-guard.ts", coreInput(tool), true);
+    if (guardCode !== 0) process.exit(guardCode);
+    if (await blockWhileGateIsOpen()) process.exit(2);
     process.exit(0);
-    return;
   }
-  const guardCode = runCore("aidlc-state-transition-guard.ts", coreInput(tool), true);
-  if (guardCode !== 0) process.exit(guardCode);
-  if (await blockWhileGateIsOpen()) process.exit(2);
-  process.exit(0);
-}
 
-if (target === "posttool") {
-  const tool = canonicalTool(stringValue(input.tool_name));
-  if (!tool) {
+  if (target === "posttool") {
+    const tool = canonicalTool(stringValue(input.tool_name));
+    if (!tool) {
+      process.exit(0);
+      return;
+    }
+    if ((tool === "Write" || tool === "Edit") && fileFrom(toolInput(input))) {
+      const payload = coreInput(tool);
+      runCore("aidlc-audit-logger.ts", payload);
+      runCore("aidlc-sensor-fire.ts", payload);
+    }
+    if (tool === "Bash") {
+      runCore("aidlc-runtime-compile.ts", {
+        hook_event_name: "PostToolUse",
+        tool_name: "Bash",
+        tool_input: { command: "", source: "ide-audit-sync" },
+      });
+    }
+    if (tool === "TaskUpdate") runCore("aidlc-sync-statusline.ts", coreInput(tool));
+    if (tool === "Task") {
+      runCore("aidlc-log-subagent.ts", {
+        hook_event_name: "SubagentStop",
+        agent_type: stringValue(input.agent_type) || "unknown",
+        last_assistant_message: stringValue(input.tool_response) || stringValue(input.result),
+      });
+    }
     process.exit(0);
-    return;
   }
-  if ((tool === "Write" || tool === "Edit") && fileFrom(toolInput(input))) {
-    const payload = coreInput(tool);
-    runCore("aidlc-audit-logger.ts", payload);
-    runCore("aidlc-sensor-fire.ts", payload);
-  }
-  if (tool === "Bash") {
-    runCore("aidlc-runtime-compile.ts", {
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "", source: "ide-audit-sync" },
-    });
-  }
-  if (tool === "TaskUpdate") runCore("aidlc-sync-statusline.ts", coreInput(tool));
-  if (tool === "Task") {
-    runCore("aidlc-log-subagent.ts", {
+
+  if (target === "subagent-stop") {
+    process.exit(runCore("aidlc-log-subagent.ts", {
       hook_event_name: "SubagentStop",
       agent_type: stringValue(input.agent_type) || "unknown",
-      last_assistant_message: stringValue(input.tool_response) || stringValue(input.result),
+      last_assistant_message: stringValue(input.last_assistant_message) || stringValue(input.result) || stringValue(input.tool_response),
+    }));
+  }
+
+  if (target === "precompact") {
+    process.exit(runCore("aidlc-validate-state.ts", { hook_event_name: "PreCompact" }));
+  }
+
+  if (target === "stop") {
+    const temp = spawnSync(process.execPath, [hookPath("aidlc-stop.ts")], {
+      cwd: project,
+      env,
+      input: JSON.stringify({ hook_event_name: "Stop", stop_hook_active: false }),
+      encoding: "utf-8",
     });
-  }
-  process.exit(0);
-}
-
-if (target === "subagent-stop") {
-  process.exit(runCore("aidlc-log-subagent.ts", {
-    hook_event_name: "SubagentStop",
-    agent_type: stringValue(input.agent_type) || "unknown",
-    last_assistant_message: stringValue(input.last_assistant_message) || stringValue(input.result) || stringValue(input.tool_response),
-  }));
-}
-
-if (target === "precompact") {
-  process.exit(runCore("aidlc-validate-state.ts", { hook_event_name: "PreCompact" }));
-}
-
-if (target === "stop") {
-  const temp = spawnSync(process.execPath, [hookPath("aidlc-stop.ts")], {
-    cwd: project,
-    env,
-    input: JSON.stringify({ hook_event_name: "Stop", stop_hook_active: false }),
-    encoding: "utf-8",
-  });
-  if (temp.stderr) process.stderr.write(temp.stderr);
-  if (temp.stdout?.trim()) {
-    try {
-      const value = JSON.parse(temp.stdout) as { decision?: string; reason?: string };
-      if (value.decision === "block") {
-        process.stdout.write(JSON.stringify({ continue: false, stopReason: value.reason ?? "AI-DLC workflow still has pending work." }) + "\n");
+    if (temp.stderr) process.stderr.write(temp.stderr);
+    if (temp.stdout?.trim()) {
+      try {
+        const value = JSON.parse(temp.stdout) as { decision?: string; reason?: string };
+        if (value.decision === "block") {
+          process.stdout.write(JSON.stringify({ continue: false, stopReason: value.reason ?? "AI-DLC workflow still has pending work." }) + "\n");
+        }
+      } catch {
+        process.stdout.write(temp.stdout);
       }
-    } catch {
-      process.stdout.write(temp.stdout);
     }
+    process.exit(temp.status ?? 0);
   }
-  process.exit(temp.status ?? 0);
+
+  process.stderr.write(`Unknown AI-DLC Copilot hook target: ${target}\n`);
+  process.exit(2);
 }
 
-process.stderr.write(`Unknown AI-DLC Copilot hook target: ${target}\n`);
-process.exit(2);
+main().catch((e) => {
+  if (e && e.stack) process.stderr.write(String(e.stack) + "\n");
+  else process.stderr.write(String(e) + "\n");
+  process.exit(1);
+});
