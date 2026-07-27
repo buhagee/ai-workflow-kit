@@ -1,102 +1,58 @@
-# AGENT.md — Project Overview for AI Agents
+# AI-DLC Workflow Kit
 
-> **This is the committed project overview.** It explains the architecture and
-> tells you where the real workflow rules live for your IDE.
->
-> The actual workflow instructions are in IDE-specific generated files (not
-> committed). Run `./setup.sh` to install them for your IDE. See the table below.
->
-> **Session continuity:** If `aidlc-docs/aidlc-state.md` exists, read it first.
-> It is the authoritative record of what has been built, what is in progress,
-> and what comes next.
+This repository distributes AI-DLC Workflows v2 and organization-owned overlays.
+The upstream runtime is the baseline; this repository owns the lock file, team
+rules, knowledge, and extra skills.
 
----
+## First Action
 
-## How This Workflow Works
+When working on this repository, inspect the relevant source under `extensions/`
+or `setup.sh`. Do not edit a copied AI-DLC engine in a consuming project to
+add organization policy. Change the overlay source here instead.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  LAYER 3: EXTENSIONS  (this repo — extensions/)         │
-│  Jira · Confluence · org standards · glue rules         │
-├─────────────────────────────────────────────────────────┤
-│  LAYER 2: EXECUTION  (obra/superpowers — upstream)      │
-│  TDD · debugging · subagent dispatch · code review      │
-├─────────────────────────────────────────────────────────┤
-│  LAYER 1: PLANNING  (awslabs/aidlc-workflows — upstream)│
-│  Inception · Construction · Operations phases           │
-└─────────────────────────────────────────────────────────┘
-```
+## Distribution Contract
 
-**The main agent owns all of Layer 1 (planning) directly.**
-Superpowers (Layer 2) only activates when AIDLC reaches Code Generation.
+`setup.sh` is the single installer entry point. The installer:
 
----
+1. Reads the reviewed revision in `upstream.lock` from `vendor/aidlc-workflows/`.
+2. Copies one approved AI-DLC v2 distribution from the vendored `dist/<harness>/`.
+3. Preserves project-owned `aidlc/` state and learning files.
+4. Applies managed organization-rule blocks to `aidlc/spaces/default/memory/team.md`.
+5. Installs team knowledge and native harness skills.
+6. Runs the harness doctor unless explicitly skipped.
 
-## ⛔ MANDATORY FIRST ACTION
+The supported harnesses are GitHub Copilot in VS Code, Claude Code, Kiro IDE,
+Kiro CLI, Codex CLI, and opencode. Copilot uses the kit's global adapter; the
+other harnesses use their official v2 project distributions. Cursor, Cline, and
+Amazon Q are not supported.
 
-Read your IDE's workflow entry point (see table below). That file contains all
-instructions. Follow it from the top.
+## Team-Owned Surfaces
 
-Do NOT read Superpowers skills at session start. They are invoked by the AIDLC
-workflow at the right time (Code Generation stage).
-
----
-
-## Where the Workflow Rules Live (by IDE)
-
-| IDE | Workflow entry point | Skills location |
+| Surface | Source | Consuming project destination |
 |---|---|---|
-| Kiro | `.kiro/steering/aidlc-workflow.md` *(generated)* | `.kiro/steering/superpowers-skills/` *(generated, manual-load)* |
-| Amazon Q | `.amazonq/rules/aws-aidlc-rules/core-workflow.md` *(generated)* | `.amazonq/rules/superpowers-skills/` *(generated)* |
-| Claude Code | `CLAUDE.md` *(generated)* | `.claude/skills/` *(generated)* |
-| GitHub Copilot | `.github/copilot-instructions.md` *(generated)* | `.github/skills/` *(committed)* |
-| Cursor / Cline | `.cursor/rules/` or `.clinerules/` *(generated)* | `~/.agents/skills/superpowers/` |
-| Codex / generic | `AGENTS.md` *(generated)* | `~/.agents/skills/superpowers/` |
+| Mandatory rules | `extensions/org-standards/` | `aidlc/spaces/default/memory/team.md` |
+| Reference knowledge | `extensions/knowledge/` | `aidlc/spaces/default/knowledge/` |
+| Extra skills | `extensions/skills/` | native harness skills directory, or `~/.copilot/skills/` |
+| Workflow skills | `extensions/workflows/` | native harness skills directory, or `~/.copilot/skills/` |
 
-Run `./setup.sh --ide <your-ide>` to generate the entry point for your IDE.
-Run `./setup.sh --update` to refresh both upstream layers.
+AI-DLC's learning loop writes project and team practices under the active
+space. Installer updates must preserve those files. Managed blocks use
+`ai-workflow-kit:<id>:start/end` markers and may be replaced only by the
+installer.
 
----
+## Workspace Model
 
-## Layer 1 — Planning (AIDLC)
+AI-DLC v2 stores state and artifacts under the consuming project's neutral
+`aidlc/` workspace. A flat v1 `aidlc-docs/` workspace is legacy input and may be
+migrated by AI-DLC v2 on first run; never delete it automatically.
 
-**Governs:** All phases from Inception through Construction design stages.
+## Upstream Rules
 
-**The main agent works directly** — no subagents, no skill invocations.
-
-Phases:
-- **Inception** — requirements, user stories, application design, units of work
-- **Construction (design)** — functional design, NFR design, infrastructure design
-- **Construction (code generation)** — hands off to Layer 2 at this point
-
----
-
-## Layer 2 — Execution (Superpowers)
-
-**Activates at:** Code Generation stage of the Construction Phase.
-
-**Entry point:** Read `extensions/glue/superpowers-handoff.md` (or its installed
-copy in the rule-details directory) when AIDLC reaches Code Generation.
-
-**The main agent NEVER writes implementation code directly.** Dispatch a
-subagent for every coding task using `subagent-driven-development`.
-
----
-
-## Layer 3 — Extensions
-
-**Location:** `extensions/` in this repo, copied to rule-details by setup.sh.
-
-**Active extensions:**
-- `glue/superpowers-handoff.md` — AIDLC→Superpowers handoff (read at Code Generation)
-- `integrations/jira/` — Jira sync (opt-in at workflow start)
-- `integrations/confluence/` — Confluence sync (opt-in at workflow start)
-- `org-standards/` — team-specific rules (always active)
-
----
-
-## Upstream Sources
-
-- AIDLC: https://github.com/awslabs/aidlc-workflows (MIT-0)
-- Superpowers: https://github.com/obra/superpowers (MIT)
-- Setup: run `./setup.sh` to install/update both layers
+- Pin upstream changes in `upstream.lock`; do not use a floating `latest` release.
+- Run `scripts/update-upstream.sh` only as a maintainer operation; developers
+  install the committed vendor snapshot offline.
+- Copy generated `dist/<harness>/` output; do not patch `core/` or generated files.
+- Use the upstream plugin mechanism for additive stages, agents, sensors, and
+  contributions.
+- Use the upstream harness-porting guide before adding another IDE.
+- Keep organization policy in overlays, not in the framework runtime.

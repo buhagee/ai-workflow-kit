@@ -1,0 +1,145 @@
+// harness/kiro-ide/manifest.ts — the Kiro IDE distribution row.
+//
+// Identical to the Kiro CLI harness (harness/kiro/) EXCEPT:
+//   - Ships v2 hook JSON files (hooks/aidlc-*.json, the
+//     {"version":"v1","hooks":[...]} schema with PascalCase triggers) for hook
+//     registration on IDE >=1.0.1xx, plus legacy .kiro.hook files for pre-1.0
+//     IDE builds (coexistence: no double-firing on any generation tested)
+//   - The aidlc.json agent config omits the `hooks` field (dead weight in IDE)
+//   - Injects a `tools:` frontmatter grant into the delegation-target agent
+//     .md files (frontmatterAdditions below) - the IDE resolves a delegated
+//     subagent's tools from the agent .md frontmatter, not from the agent-v1
+//     JSON the CLI reads, so without the injected line an IDE delegate runs
+//     toolless (field-proven: the dispatched composer reported "terminal tool
+//     not available" until the grant was added).
+//
+// The CLI harness relies on agent JSON hooks (the `hooks` object inside
+// aidlc.json); the IDE harness relies on hooks/aidlc-*.json v2 hook files (the
+// only mechanism current IDEs execute). Both share the same core and TS hook
+// bodies; each ships its own adapter.
+
+import type { HarnessManifest } from "../../scripts/manifest-types.ts";
+import onboardingFills from "./onboarding.fills.ts";
+
+const manifest: HarnessManifest = {
+  name: "kiro-ide",
+  harnessDir: ".kiro",
+  tierFlavor: "kiro",
+
+  // Same core projection as kiro CLI.
+  coreDirs: [
+    { src: "tools", dst: "tools" },
+    { src: "aidlc-common", dst: "aidlc-common" },
+    { src: "knowledge", dst: "knowledge" },
+    { src: "sensors", dst: "sensors" },
+    { src: "scopes", dst: "scopes" },
+    { src: "agents", dst: "agents" },
+    { src: "hooks", dst: "hooks" },
+    { src: "skills/aidlc-session-cost", dst: "skills/aidlc-session-cost" },
+    { src: "skills/aidlc-replay", dst: "skills/aidlc-replay" },
+    { src: "skills/aidlc-outcomes-pack", dst: "skills/aidlc-outcomes-pack" },
+  ],
+
+  // Authored surfaces: same as CLI but adds the v2 hook JSON files and omits
+  // the hooks field from aidlc.json.
+  harnessFiles: [
+    { src: "skills/aidlc/SKILL.md", dst: "skills/aidlc/SKILL.md" },
+    { src: "skills/aidlc/question-rendering.md", dst: "skills/aidlc/question-rendering.md" },
+    { src: "agents/aidlc.json", dst: "agents/aidlc.json" },
+    { src: "agents/aidlc-architect-agent.json", dst: "agents/aidlc-architect-agent.json" },
+    { src: "agents/aidlc-developer-agent.json", dst: "agents/aidlc-developer-agent.json" },
+    { src: "agents/aidlc-product-lead-agent.json", dst: "agents/aidlc-product-lead-agent.json" },
+    { src: "agents/aidlc-architecture-reviewer-agent.json", dst: "agents/aidlc-architecture-reviewer-agent.json" },
+    { src: "agents/aidlc-composer-agent.json", dst: "agents/aidlc-composer-agent.json" },
+    // Ensemble collaborator configs (2.5.0 roster closure): lean read+shell
+    // delegation targets so any stage can flip to an ensemble topology here.
+    { src: "agents/aidlc-product-agent.json", dst: "agents/aidlc-product-agent.json" },
+    { src: "agents/aidlc-design-agent.json", dst: "agents/aidlc-design-agent.json" },
+    { src: "agents/aidlc-delivery-agent.json", dst: "agents/aidlc-delivery-agent.json" },
+    { src: "agents/aidlc-aws-platform-agent.json", dst: "agents/aidlc-aws-platform-agent.json" },
+    { src: "agents/aidlc-compliance-agent.json", dst: "agents/aidlc-compliance-agent.json" },
+    { src: "agents/aidlc-devsecops-agent.json", dst: "agents/aidlc-devsecops-agent.json" },
+    { src: "agents/aidlc-quality-agent.json", dst: "agents/aidlc-quality-agent.json" },
+    { src: "agents/aidlc-pipeline-deploy-agent.json", dst: "agents/aidlc-pipeline-deploy-agent.json" },
+    { src: "agents/aidlc-operations-agent.json", dst: "agents/aidlc-operations-agent.json" },
+    { src: "hooks/aidlc-kiro-adapter.ts", dst: "hooks/aidlc-kiro-adapter.ts" },
+    { src: "hooks/aidlc-audit-logger.json", dst: "hooks/aidlc-audit-logger.json" },
+    { src: "hooks/aidlc-mint.json", dst: "hooks/aidlc-mint.json" },
+    { src: "hooks/aidlc-block.json", dst: "hooks/aidlc-block.json" },
+    { src: "hooks/aidlc-log-subagent.json", dst: "hooks/aidlc-log-subagent.json" },
+    { src: "hooks/aidlc-runtime-compile.json", dst: "hooks/aidlc-runtime-compile.json" },
+    // No v2 session-end registration: the IDE's Stop trigger fires at the end
+    // of every assistant turn (not at conversation close), so a v2 registration
+    // would append a spurious SESSION_ENDED between prompts. session-end stays
+    // legacy-only (below) until the IDE exposes a genuine session-end event.
+    { src: "hooks/aidlc-session-start.json", dst: "hooks/aidlc-session-start.json" },
+    { src: "hooks/aidlc-stop.json", dst: "hooks/aidlc-stop.json" },
+    { src: "hooks/aidlc-sync-statusline.json", dst: "hooks/aidlc-sync-statusline.json" },
+    // Legacy .kiro.hook files (pre-1.0 IDE format): retained for coexistence
+    // with IDE builds <1.0. On 1.x+ these are inert (struck-through, never fire);
+    // on pre-1.0 they are the only mechanism that executes. Safe to ship both:
+    // no double-firing observed on any IDE generation tested.
+    { src: "hooks/aidlc-audit-logger.kiro.hook", dst: "hooks/aidlc-audit-logger.kiro.hook" },
+    { src: "hooks/aidlc-mint.kiro.hook", dst: "hooks/aidlc-mint.kiro.hook" },
+    { src: "hooks/aidlc-block.kiro.hook", dst: "hooks/aidlc-block.kiro.hook" },
+    { src: "hooks/aidlc-log-subagent.kiro.hook", dst: "hooks/aidlc-log-subagent.kiro.hook" },
+    { src: "hooks/aidlc-runtime-compile.kiro.hook", dst: "hooks/aidlc-runtime-compile.kiro.hook" },
+    { src: "hooks/aidlc-session-end.kiro.hook", dst: "hooks/aidlc-session-end.kiro.hook" },
+    { src: "hooks/aidlc-session-start.kiro.hook", dst: "hooks/aidlc-session-start.kiro.hook" },
+    { src: "hooks/aidlc-stop.kiro.hook", dst: "hooks/aidlc-stop.kiro.hook" },
+    { src: "hooks/aidlc-sync-statusline.kiro.hook", dst: "hooks/aidlc-sync-statusline.kiro.hook" },
+    { src: "settings/cli.json", dst: "settings/cli.json" },
+    // Project-root .gitignore (beside .kiro/, not inside it) — same workspace-layout
+    // committed-vs-ignored split as the Kiro CLI tree: per-user cursors + machine-local
+    // runtime ignored, the shared work (memory/codekb/registry/state/audit shards/
+    // artifacts) committed. Authored as dot-gitignore so it does not act as a live
+    // ignore inside harness/kiro-ide/; projectRoot routes it to dist/kiro-ide/.gitignore
+    // + the --check drift guard. (Kiro IDE DOES support a promptSubmit seam (the
+    // human-turn mint hook) and a preToolUse seam (the exit-2 human-presence hard
+    // block) - both spike-proven on the IDE; the latch lines describe what is wired,
+    // not a platform limit.)
+    { src: "dot-gitignore", dst: ".gitignore", projectRoot: true },
+  ],
+
+  // IDE-native tool grants for the delegation targets (the agents the
+  // conductor dispatches via the `subagent` tool). The IDE reads these
+  // from the .md frontmatter; the agent-v1 JSONs above are CLI-only. Kiro IDE
+  // frontmatter tool names: "read" / "write" / "shell". NOTE the IDE grant is
+  // UNSCOPED (no allowedCommands/allowedPaths equivalent) - wider than the
+  // CLI JSON sandbox; the persona Boundaries prose and the conductor's gates
+  // remain the behavioral constraint. Reviewers need "write" too: the stage
+  // protocol has them append a `## Review` section to the primary artifact
+  // (the same grant their CLI JSONs carry). The nine ensemble collaborators
+  // (2.5.0 roster closure) also get write: the everyone-writes model has each
+  // collaborator author its own contribution file (stage-protocol §11); the
+  // contributions-dir-only bound is prose + the engine's ensemble evidence
+  // check, since IDE grants cannot express per-stage paths. Never grant a
+  // delegation tool here - delegates must not nest.
+  frontmatterAdditions: [
+    { file: "agents/aidlc-composer-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-developer-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-architect-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-product-lead-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-architecture-reviewer-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-product-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-design-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-delivery-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-aws-platform-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-compliance-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-devsecops-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-quality-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-pipeline-deploy-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+    { file: "agents/aidlc-operations-agent.md", lines: [`tools: ["read", "write", "shell"]`] },
+  ],
+
+  onboarding: { dst: "AGENTS.md", projectRoot: true, fills: onboardingFills },
+
+  rulesRename: "steering",
+
+  emit: null,
+
+  // Folder-drop + .kiro.hook, same as Kiro CLI (both .kiro trees). No host store.
+  plugin: { manifestDir: ".kiro-plugin", kind: "kiro" },
+};
+
+export default manifest;

@@ -1,829 +1,513 @@
 #!/usr/bin/env bash
-# setup.sh — Install AI-DLC + Superpowers + optional integrations
-#
-# Usage:
-#   ./setup.sh                        # detect IDE, install both layers
-#   ./setup.sh --ide cursor           # force a specific IDE
-#   ./setup.sh --with-jira            # include Jira sync rules
-#   ./setup.sh --with-confluence      # include Confluence sync rules
-#   ./setup.sh --with-jira --with-confluence
-#   ./setup.sh --update               # re-pull upstreams, keep extensions
-#
-# Supported IDEs: kiro, amazonq, cursor, cline, claudecode, copilot, codex
-
 set -euo pipefail
 
-# ── Config ────────────────────────────────────────────────────────────────────
-AIDLC_REPO="https://github.com/awslabs/aidlc-workflows"
-AIDLC_VERSION="latest"   # set to a tag like "v1.2.0" to pin
-SUPERPOWERS_REPO="https://github.com/obra/superpowers"
-CAVEMAN_REPO="https://github.com/JuliusBrussee/caveman"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCK_FILE="$SCRIPT_DIR/upstream.lock"
 EXTENSIONS_DIR="$SCRIPT_DIR/extensions"
 TMPDIR_WORK="$(mktemp -d)"
 
-# ── Flags ─────────────────────────────────────────────────────────────────────
-IDE=""
-WITH_JIRA=false
-WITH_CONFLUENCE=false
+LOCK_AIDLC_REPO="https://github.com/awslabs/aidlc-workflows"
+LOCK_AIDLC_REF="v2"
+LOCK_AIDLC_COMMIT="c38ba24aa5633b4071fb15b5d654cdb9c7aa9b51"
+LOCK_AIDLC_VERSION="2.5.10"
+if [[ -f "$LOCK_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$LOCK_FILE"
+fi
+
+AIDLC_SOURCE_DIR="$SCRIPT_DIR/vendor/aidlc-workflows"
+COPILOT_ROOT="${AIDLC_COPILOT_ROOT:-$HOME/.copilot/aidlc}"
+PROJECT_DIR="${AIDLC_PROJECT_DIR:-$PWD}"
+PROJECT_DIR_EXPLICIT=false
+[[ -n "${AIDLC_PROJECT_DIR:-}" ]] && PROJECT_DIR_EXPLICIT=true
+IDE="${AIDLC_IDE:-}"
+SKIP_DOCTOR=false
 UPDATE_ONLY=false
 
-for arg in "$@"; do
-  case $arg in
-    --ide=*)      IDE="${arg#*=}" ;;
-    --ide)        shift; IDE="$1" ;;
-    --with-jira)  WITH_JIRA=true ;;
-    --with-confluence) WITH_CONFLUENCE=true ;;
-    --update)     UPDATE_ONLY=true ;;
-  esac
-done
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-info()    { echo "  ✓ $*"; }
-warn()    { echo "  ⚠ $*"; }
-section() { echo; echo "▶ $*"; }
-die()     { echo "✗ ERROR: $*" >&2; exit 1; }
+info() { printf '  [ok] %s\n' "$*"; }
+warn() { printf '  [warn] %s\n' "$*"; }
+section() { printf '\n==> %s\n' "$*"; }
+die() { printf '[error] %s\n' "$*" >&2; exit 1; }
 
 require() {
-  command -v "$1" &>/dev/null || die "$1 is required but not installed. $2"
+  command -v "$1" >/dev/null 2>&1 || die "$1 is required. $2"
 }
 
-# inject_inclusion_manual <skill_file>
-# Ensures the SKILL.md has `inclusion: manual` in its YAML front-matter.
-# Works on Git Bash (Windows), macOS, and Linux without relying on sed \n.
-inject_inclusion_manual() {
-  local skill_file="$1"
-  [[ -f "$skill_file" ]] || return 0
+usage() {
+  cat <<'EOF'
+AI-DLC v2 distribution installer
 
-  if ! head -1 "$skill_file" | grep -q "^---"; then
-    # No front-matter at all — prepend a minimal one
-    local tmp_file
-    tmp_file="$(mktemp)"
-    printf -- '---\ninclusion: manual\n---\n\n' | cat - "$skill_file" > "$tmp_file"
-    mv "$tmp_file" "$skill_file"
-  elif ! grep -q "inclusion:" "$skill_file"; then
-    # Has front-matter but no inclusion key — insert after the opening ---
-    # Use Python for portable in-place edit (avoids sed \n portability issues)
-    python3 - "$skill_file" <<'PYEOF'
-import sys, re
-path = sys.argv[1]
-with open(path, 'r', encoding='utf-8') as f:
-    content = f.read()
-# Insert 'inclusion: manual' after the first '---' line
-patched = re.sub(r'^---\n', '---\ninclusion: manual\n', content, count=1)
-with open(path, 'w', encoding='utf-8') as f:
-    f.write(patched)
-PYEOF
-  fi
+Usage:
+  ./setup.sh --ide <claude|copilot|kiro-ide|kiro-cli|codex|opencode>
+  ./setup.sh --update --project-dir <path>
+
+Options:
+  --ide <name>              Select Claude, Copilot, Kiro, Codex, or opencode.
+  --project-dir <path>      Install into a project other than the current directory.
+  --skip-doctor             Install without running the harness health check.
+  --update                  Reapply the vendored distribution and team overlays.
+  --help                    Show this help.
+
+Normal setup is offline and never contacts upstream. Maintainers update the
+vendored source with scripts/update-upstream.sh.
+
+GitHub Copilot uses the user-level VS Code customization locations and does not
+copy the AI-DLC engine into projects. Cursor, Cline, and Amazon Q are not
+supported by this installer.
+EOF
 }
 
-# ── IDE Detection ─────────────────────────────────────────────────────────────
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --ide=*) IDE="${1#*=}"; shift ;;
+      --ide) [[ $# -ge 2 ]] || die "--ide requires a value"; IDE="$2"; shift 2 ;;
+      --project-dir=*) PROJECT_DIR="${1#*=}"; PROJECT_DIR_EXPLICIT=true; shift ;;
+      --project-dir) [[ $# -ge 2 ]] || die "--project-dir requires a value"; PROJECT_DIR="$2"; PROJECT_DIR_EXPLICIT=true; shift 2 ;;
+      --skip-doctor) SKIP_DOCTOR=true; shift ;;
+      --update) UPDATE_ONLY=true; shift ;;
+      --help|-h) usage; exit 0 ;;
+      *) die "Unknown option: $1. Use --help for usage." ;;
+    esac
+  done
+}
+
+normalise_ide() {
+  case "$IDE" in
+    claude|claudecode) IDE="claude" ;;
+    copilot) IDE="copilot" ;;
+    kiro|kiro-ide) IDE="kiro-ide" ;;
+    kiro-cli) IDE="kiro-cli" ;;
+    codex) IDE="codex" ;;
+    opencode) IDE="opencode" ;;
+    cursor|cline|amazonq)
+      die "AI-DLC v2 has no official '$IDE' distribution. Use Claude, Copilot, Kiro, Codex, or opencode." ;;
+    *) die "Unsupported or missing harness '$IDE'. Choose claude, copilot, kiro-ide, kiro-cli, codex, or opencode." ;;
+  esac
+}
+
 detect_ide() {
-  if [[ -n "$IDE" ]]; then return; fi
-
-  # Check for IDE-specific marker files/dirs
-  # Note: on first run none of these exist yet — use --ide to be explicit
-  if [[ -d ".kiro" ]];         then IDE="kiro";       return; fi
-  if [[ -d ".amazonq" ]];      then IDE="amazonq";    return; fi
-  if [[ -d ".cursor" ]];       then IDE="cursor";     return; fi
-  if [[ -d ".clinerules" ]];   then IDE="cline";      return; fi
-  if [[ -d ".claude" ]];       then IDE="claudecode"; return; fi
-  if [[ -f "CLAUDE.md" ]];     then IDE="claudecode"; return; fi
-  if [[ -d ".github" ]];       then IDE="copilot";    return; fi
-  if [[ -f "AGENTS.md" ]];     then IDE="codex";      return; fi
-
-  # Try to detect from environment (Kiro sets KIRO_SESSION, Q sets AWS_CODEWHISPERER)
-  if [[ -n "${KIRO_SESSION:-}" ]]; then IDE="kiro";    return; fi
-  if [[ -n "${KIRO_IDE:-}" ]];     then IDE="kiro";    return; fi
-
-  # Default
-  IDE="codex"
-  warn "Could not detect IDE — defaulting to AGENTS.md (Codex/generic)."
-  warn "For Kiro run: ./setup.sh --ide kiro"
-  warn "For Claude Code run: ./setup.sh --ide claudecode"
-}
-
-# ── Download AIDLC ────────────────────────────────────────────────────────────
-download_aidlc() {
-  section "Downloading AIDLC rules from awslabs/aidlc-workflows"
-  require curl "Install curl: https://curl.se"
-  require unzip "Install unzip via your package manager"
-
-  local zip_url
-  if [[ "$AIDLC_VERSION" == "latest" ]]; then
-    # Resolve latest release tag via GitHub API
-    local tag
-    tag=$(curl -fsSL "https://api.github.com/repos/awslabs/aidlc-workflows/releases/latest" \
-      | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-    [[ -n "$tag" ]] || die "Could not resolve latest AIDLC release tag"
-    zip_url="https://github.com/awslabs/aidlc-workflows/releases/download/${tag}/ai-dlc-rules-${tag}.zip"
-    info "Latest AIDLC release: $tag"
-  else
-    zip_url="https://github.com/awslabs/aidlc-workflows/releases/download/${AIDLC_VERSION}/ai-dlc-rules-${AIDLC_VERSION}.zip"
+  [[ -n "$IDE" ]] && return
+  local detected=()
+  [[ -d "$PROJECT_DIR/.claude" ]] && detected+=("claude")
+  [[ -d "$PROJECT_DIR/.kiro" ]] && detected+=("kiro-ide")
+  [[ -d "$PROJECT_DIR/.codex" ]] && detected+=("codex")
+  [[ -d "$PROJECT_DIR/.opencode" ]] && detected+=("opencode")
+  if [[ -f "$PROJECT_DIR/.github/copilot-instructions.md" || -d "$PROJECT_DIR/.github/skills" ]]; then
+    detected+=("copilot")
   fi
-
-  curl -fsSL "$zip_url" -o "$TMPDIR_WORK/aidlc.zip" \
-    || die "Failed to download AIDLC from $zip_url"
-  unzip -q "$TMPDIR_WORK/aidlc.zip" -d "$TMPDIR_WORK/aidlc"
-  info "Downloaded and extracted AIDLC rules"
-
-  # Patch the upstream core-workflow.md so Code Generation hands off to Superpowers
-  patch_core_workflow "$TMPDIR_WORK/aidlc/aidlc-rules/aws-aidlc-rules/core-workflow.md"
+  if [[ ${#detected[@]} -eq 1 ]]; then
+    IDE="${detected[0]}"
+    return
+  fi
+  if [[ ${#detected[@]} -gt 1 ]]; then
+    die "Multiple AI-DLC harnesses detected (${detected[*]}). Pass --ide explicitly."
+  fi
+  die "Could not detect an AI-DLC v2 harness. Pass --ide explicitly."
 }
 
-# ── Patch upstream core-workflow.md ──────────────────────────────────────────
-# The upstream AIDLC core-workflow.md tells the agent to generate code itself
-# in Code Generation Part 2. We replace that instruction with the Superpowers
-# handoff so the AIDLC workflow itself enforces the handoff — not just the
-# preamble sitting above it.
-patch_core_workflow() {
-  local core_workflow="$1"   # path to the core-workflow.md to patch in-place
-  [[ -f "$core_workflow" ]] || return 0
-
-  python3 - "$core_workflow" <<'PYEOF'
-import sys, re
-
-path = sys.argv[1]
-with open(path, 'r', encoding='utf-8') as f:
-    content = f.read()
-
-# Locate the Code Generation section and replace Part 2 execution step.
-# We match the specific upstream text and replace it with the Superpowers handoff.
-old = (
-    "3. **PART 1 - Planning**: Create code generation plan with checkboxes, get user approval\n"
-    "4. **PART 2 - Generation**: Execute approved plan to generate code for this unit"
-)
-new = (
-    "3. **PART 1 - Planning**: Create code generation plan with checkboxes, get user approval\n"
-    "4. **PART 2 - Generation (Superpowers handoff — MANDATORY)**:\n"
-    "   - Read the Superpowers handoff file (path resolved in the preamble above)\n"
-    "   - Follow Rule GLUE-01: read `using-superpowers` skill, then `subagent-driven-development`\n"
-    "   - Dispatch a subagent for EVERY coding task — do NOT write implementation code yourself\n"
-    "   - Include \"Use the test-driven-development skill\" in every subagent's task text\n"
-    "   - After each subagent: invoke `verification-before-completion`, then `requesting-code-review`"
-)
-
-if old in content:
-    content = content.replace(old, new, 1)
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
-    print("  ✓ Patched Code Generation Part 2 → Superpowers handoff")
-else:
-    print("  ⚠ Code Generation patch target not found — upstream may have changed; preamble still enforces handoff")
-PYEOF
+dist_name() {
+  case "$IDE" in
+    claude) printf 'claude' ;;
+    copilot) printf 'claude' ;;
+    kiro-ide) printf 'kiro-ide' ;;
+    kiro-cli) printf 'kiro' ;;
+    codex) printf 'codex' ;;
+    opencode) printf 'opencode' ;;
+  esac
 }
 
-# ── Install AIDLC per IDE ─────────────────────────────────────────────────────
-install_aidlc() {
-  section "Installing AIDLC rules for IDE: $IDE"
+harness_dir() {
+  case "$IDE" in
+    claude) printf '.claude' ;;
+    copilot) printf '.claude' ;;
+    kiro-ide|kiro-cli) printf '.kiro' ;;
+    codex) printf '.codex' ;;
+    opencode) printf '.aidlc' ;;
+  esac
+}
 
-  local rules_src="$TMPDIR_WORK/aidlc/aidlc-rules/aws-aidlc-rules"
-  local details_src="$TMPDIR_WORK/aidlc/aidlc-rules/aws-aidlc-rule-details"
-  local preamble="$EXTENSIONS_DIR/glue/entry-point-preamble.md"
+skills_dir() {
+  case "$IDE" in
+    claude) printf '.claude/skills' ;;
+    copilot) printf '%s/skills' "$HOME/.copilot" ;;
+    kiro-ide|kiro-cli) printf '.kiro/skills' ;;
+    codex) printf '.agents/skills' ;;
+    opencode) printf '.aidlc/skills' ;;
+  esac
+}
 
-  [[ -d "$rules_src" ]] || die "Expected aws-aidlc-rules/ in downloaded zip — structure may have changed"
+ensure_project() {
+  [[ -d "$PROJECT_DIR" ]] || die "Project directory does not exist: $PROJECT_DIR"
+  PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+  if [[ "$IDE" != "copilot" && "$PROJECT_DIR" == "$SCRIPT_DIR" && "$PROJECT_DIR_EXPLICIT" != true ]]; then
+    die "The kit cannot install AI-DLC into itself. Run from the target project or pass --project-dir <path>."
+  fi
+  cd "$PROJECT_DIR"
+}
 
-  # assemble_entry_point <dest_file> <upstream_src>
-  # Writes: preamble (if present) + upstream content → dest_file
-  assemble_entry_point() {
-    local dest="$1"
-    local src="$2"
-    if [[ -f "$preamble" ]]; then
-      cat "$preamble" "$src" > "$dest"
-    else
-      cp "$src" "$dest"
+ensure_aidlc_source() {
+  section "Preparing AI-DLC v2 source"
+  AIDLC_SOURCE_DIR="$(cd "$SCRIPT_DIR/vendor/aidlc-workflows" 2>/dev/null && pwd)" \
+    || die "Approved AI-DLC source not found at $SCRIPT_DIR/vendor/aidlc-workflows. Run scripts/update-upstream.sh as a maintainer."
+  [[ -d "$AIDLC_SOURCE_DIR/dist/$(dist_name)" ]] \
+    || die "Approved AI-DLC source has no dist/$(dist_name) tree: $AIDLC_SOURCE_DIR"
+  info "Using AI-DLC v${LOCK_AIDLC_VERSION} from $AIDLC_SOURCE_DIR"
+}
+
+copy_tree_contents() {
+  local source_dir="$1"
+  local destination_dir="$2"
+  mkdir -p "$destination_dir"
+  cp -R "$source_dir"/. "$destination_dir"/
+}
+
+copy_workspace_tree() {
+  local source_dir="$1"
+  local destination_dir="$2"
+  mkdir -p "$destination_dir"
+
+  while IFS= read -r -d '' source_file; do
+    local relative_path="${source_file#"$source_dir"/}"
+    local destination_file="$destination_dir/$relative_path"
+    local preserve=false
+    case "$relative_path" in
+      active-space|spaces/*/active-intent|spaces/*/intents.json|spaces/*/intents/*|spaces/*/codekb/*|spaces/*/knowledge/*|spaces/*/templates/*|spaces/*/memory/team.md|spaces/*/memory/project.md|spaces/*/memory/phases/*)
+        preserve=true
+        ;;
+    esac
+    if $preserve && [[ -e "$destination_file" ]]; then
+      continue
     fi
-  }
-
-  case "$IDE" in
-    kiro)
-      # Kiro auto-loads every .md file in .kiro/steering/ into context.
-      # We only want the single AIDLC entry point (core-workflow.md) auto-loaded.
-      # Rule-details are read on-demand by the agent — keep them outside steering/.
-      mkdir -p .kiro/steering
-      # Write a single steering file with Kiro front-matter + preamble + core workflow
-      {
-        printf -- '---\ndescription: "AI-DLC adaptive workflow for software development"\ninclusion: always\n---\n\n'
-        [[ -f "$preamble" ]] && cat "$preamble"
-        cat "$rules_src/core-workflow.md"
-      } > .kiro/steering/aidlc-workflow.md
-      # Rule-details go outside steering/ so they are NOT auto-loaded
-      cp -R "$details_src" .kiro/aws-aidlc-rule-details
-      info "Installed AIDLC entry point to .kiro/steering/aidlc-workflow.md (auto-loaded)"
-      info "Installed rule-details to .kiro/aws-aidlc-rule-details/ (on-demand)"
-      ;;
-    amazonq)
-      mkdir -p .amazonq/rules
-      cp -R "$rules_src" .amazonq/rules/
-      cp -R "$details_src" .amazonq/
-      info "Installed to .amazonq/rules/aws-aidlc-rules/ and .amazonq/aws-aidlc-rule-details/"
-      if [[ -f ".amazonq/rules/aws-aidlc-rules/core-workflow.md" ]]; then
-        assemble_entry_point \
-          "$TMPDIR_WORK/amazonq-entry.md" \
-          ".amazonq/rules/aws-aidlc-rules/core-workflow.md"
-        mv "$TMPDIR_WORK/amazonq-entry.md" ".amazonq/rules/aws-aidlc-rules/core-workflow.md"
-        info "Prepended entry-point preamble to .amazonq/rules/aws-aidlc-rules/core-workflow.md"
-      fi
-      ;;
-    cursor)
-      mkdir -p .cursor/rules
-      {
-        printf -- '---\ndescription: "AI-DLC adaptive workflow for software development"\nalwaysApply: true\n---\n\n'
-        [[ -f "$preamble" ]] && cat "$preamble"
-        cat "$rules_src/core-workflow.md"
-      } > .cursor/rules/ai-dlc-workflow.mdc
-      mkdir -p .aidlc-rule-details
-      cp -R "$details_src"/. .aidlc-rule-details/
-      info "Installed to .cursor/rules/ai-dlc-workflow.mdc and .aidlc-rule-details/"
-      ;;
-    cline)
-      mkdir -p .clinerules
-      assemble_entry_point ".clinerules/core-workflow.md" "$rules_src/core-workflow.md"
-      mkdir -p .aidlc-rule-details
-      cp -R "$details_src"/. .aidlc-rule-details/
-      info "Installed to .clinerules/core-workflow.md and .aidlc-rule-details/"
-      ;;
-    claudecode)
-      assemble_entry_point "./CLAUDE.md" "$rules_src/core-workflow.md"
-      mkdir -p .aidlc-rule-details
-      cp -R "$details_src"/. .aidlc-rule-details/
-      info "Installed to CLAUDE.md and .aidlc-rule-details/"
-      ;;
-    copilot)
-      mkdir -p .github
-      assemble_entry_point ".github/copilot-instructions.md" "$rules_src/core-workflow.md"
-      mkdir -p .aidlc-rule-details
-      cp -R "$details_src"/. .aidlc-rule-details/
-      info "Installed to .github/copilot-instructions.md and .aidlc-rule-details/"
-      ;;
-    codex|*)
-      assemble_entry_point "./AGENTS.md" "$rules_src/core-workflow.md"
-      mkdir -p .aidlc-rule-details
-      cp -R "$details_src"/. .aidlc-rule-details/
-      info "Installed to AGENTS.md and .aidlc-rule-details/"
-      ;;
-  esac
-
-  [[ -f "$preamble" ]] && info "Entry-point preamble prepended from extensions/glue/entry-point-preamble.md"
+    mkdir -p "$(dirname "$destination_file")"
+    cp "$source_file" "$destination_file"
+  done < <(find "$source_dir" -type f -print0)
 }
 
-# ── Copy extensions into AIDLC rule-details ───────────────────────────────────
-install_extensions() {
-  section "Installing extensions"
+install_project_file() {
+  local source_file="$1"
+  local destination_file="$2"
+  [[ -f "$source_file" ]] || return 0
+  if [[ ! -e "$destination_file" ]]; then
+    mkdir -p "$(dirname "$destination_file")"
+    cp "$source_file" "$destination_file"
+    info "Installed $(basename "$destination_file")"
+    return 0
+  fi
+  if cmp -s "$source_file" "$destination_file"; then
+    return 0
+  fi
+  local conflict_dir="$PROJECT_DIR/.ai-workflow-kit/upstream-conflicts"
+  mkdir -p "$conflict_dir"
+  cp "$source_file" "$conflict_dir/$(basename "$source_file")"
+  warn "Existing $(basename "$destination_file") was preserved; review $conflict_dir/$(basename "$source_file")"
+}
 
-  # Determine where aidlc-rule-details lives for this IDE
-  local details_dest
+install_distribution() {
+  section "Installing AI-DLC v2 harness: $IDE"
+  local distribution="$AIDLC_SOURCE_DIR/dist/$(dist_name)"
+  local engine_destination="$PROJECT_DIR/$(harness_dir)"
+  local workspace_source="$distribution/aidlc"
+
+  [[ -d "$workspace_source" ]] || die "AI-DLC v2 workspace shell is missing: $workspace_source"
+  copy_tree_contents "$distribution/$(harness_dir)" "$engine_destination"
   case "$IDE" in
-    kiro)     details_dest=".kiro/aws-aidlc-rule-details" ;;
-    amazonq)  details_dest=".amazonq/aws-aidlc-rule-details" ;;
-    *)        details_dest=".aidlc-rule-details" ;;
+    codex) copy_tree_contents "$distribution/.agents" "$PROJECT_DIR/.agents" ;;
+    opencode) copy_tree_contents "$distribution/.opencode" "$PROJECT_DIR/.opencode" ;;
   esac
+  copy_workspace_tree "$workspace_source" "$PROJECT_DIR/aidlc"
 
-  mkdir -p "$details_dest/extensions"
+  install_project_file "$distribution/AGENTS.md" "$PROJECT_DIR/AGENTS.md"
+  install_project_file "$distribution/.mcp.json" "$PROJECT_DIR/.mcp.json"
+  install_project_file "$distribution/opencode.json" "$PROJECT_DIR/opencode.json"
+  info "Installed engine to $engine_destination"
+  info "Preserved existing project data under $PROJECT_DIR/aidlc"
+}
 
-  # Glue layer (always installed)
-  mkdir -p "$details_dest/extensions/glue"
-  cp "$EXTENSIONS_DIR/glue/superpowers-handoff.md" "$details_dest/extensions/glue/"
-  info "Installed glue/superpowers-handoff.md → $details_dest/extensions/glue/"
+merge_managed_block() {
+  local target_file="$1"
+  local block_file="$2"
+  local block_id="$3"
+  local begin="<!-- ai-workflow-kit:$block_id:start -->"
+  local end="<!-- ai-workflow-kit:$block_id:end -->"
+  local temporary_file="$TMPDIR_WORK/managed-$block_id.md"
 
-  # Jira (always copy opt-in file; rules file only if --with-jira)
-  mkdir -p "$details_dest/extensions/integrations/jira"
-  cp "$EXTENSIONS_DIR/integrations/jira/jira-sync.opt-in.md" \
-     "$details_dest/extensions/integrations/jira/"
-  if $WITH_JIRA; then
-    cp "$EXTENSIONS_DIR/integrations/jira/jira-sync.md" \
-       "$details_dest/extensions/integrations/jira/"
-    info "Installed Jira integration rules"
-  else
-    info "Installed Jira opt-in prompt (rules not active — re-run with --with-jira to enable)"
+  if [[ -f "$target_file" ]] && grep -Fq "$begin" "$target_file" && ! grep -Fq "$end" "$target_file"; then
+    die "Managed block '$block_id' is incomplete in $target_file"
   fi
 
-  # Confluence (always copy opt-in file; rules file only if --with-confluence)
-  mkdir -p "$details_dest/extensions/integrations/confluence"
-  cp "$EXTENSIONS_DIR/integrations/confluence/confluence-sync.opt-in.md" \
-     "$details_dest/extensions/integrations/confluence/"
-  if $WITH_CONFLUENCE; then
-    cp "$EXTENSIONS_DIR/integrations/confluence/confluence-sync.md" \
-       "$details_dest/extensions/integrations/confluence/"
-    info "Installed Confluence integration rules"
+  mkdir -p "$(dirname "$target_file")"
+  if [[ ! -f "$target_file" ]]; then
+    printf '# Team Practices\n\n' > "$target_file"
   fi
 
-  # Org standards (copy everything, skip README)
-  if compgen -G "$EXTENSIONS_DIR/org-standards/*.md" > /dev/null 2>&1; then
-    mkdir -p "$details_dest/extensions/org-standards"
-    for f in "$EXTENSIONS_DIR/org-standards/"*.md; do
-      [[ "$(basename "$f")" == "README.md" ]] && continue
-      cp "$f" "$details_dest/extensions/org-standards/"
-      info "Installed org-standard: $(basename "$f")"
+  awk -v begin="$begin" -v end="$end" -v block="$block_file" '
+    BEGIN {
+      while ((getline line < block) > 0) lines[++count] = line
+      close(block)
+      inside = 0
+      found = 0
+    }
+    $0 == begin {
+      print
+      for (i = 1; i <= count; i++) print lines[i]
+      inside = 1
+      found = 1
+      next
+    }
+    $0 == end {
+      if (inside) {
+        print
+        inside = 0
+        next
+      }
+    }
+    !inside { print }
+    END {
+      if (!found) {
+        print ""
+        print begin
+        for (i = 1; i <= count; i++) print lines[i]
+        print end
+      }
+    }
+  ' "$target_file" > "$temporary_file"
+  mv "$temporary_file" "$target_file"
+  info "Applied managed overlay: $block_id"
+}
+
+build_sources() {
+  local output_file="$1"
+  shift
+  : > "$output_file"
+  local source_file
+  for source_file in "$@"; do
+    [[ -f "$source_file" ]] || continue
+    cat "$source_file" >> "$output_file"
+    printf '\n\n' >> "$output_file"
+  done
+}
+
+install_org_rules_at() {
+  local target_file="$1"
+  local block_file="$TMPDIR_WORK/org-rules.md"
+  local sources=()
+  local source_file
+  for source_file in "$EXTENSIONS_DIR/org-standards"/*.md; do
+    [[ -f "$source_file" ]] || continue
+    [[ "$(basename "$source_file")" == "README.md" ]] && continue
+    sources+=("$source_file")
+  done
+  [[ ${#sources[@]} -gt 0 ]] || return 0
+  build_sources "$block_file" "${sources[@]}"
+  merge_managed_block "$target_file" "$block_file" "org-rules"
+}
+
+install_org_rules() {
+  install_org_rules_at "$PROJECT_DIR/aidlc/spaces/default/memory/team.md"
+}
+
+install_extra_knowledge() {
+  local knowledge_source="$EXTENSIONS_DIR/knowledge"
+  [[ -d "$knowledge_source" ]] || return 0
+  local knowledge_destination="$PROJECT_DIR/aidlc/spaces/default/knowledge"
+  local source_file
+  while IFS= read -r -d '' source_file; do
+    local relative_path="${source_file#"$knowledge_source"/}"
+    local destination_file="$knowledge_destination/$relative_path"
+    if [[ -f "$destination_file" ]]; then
+      if cmp -s "$source_file" "$destination_file"; then
+        continue
+      fi
+      local conflict_file="$PROJECT_DIR/.ai-workflow-kit/upstream-conflicts/knowledge/$relative_path"
+      mkdir -p "$(dirname "$conflict_file")"
+      cp "$source_file" "$conflict_file"
+      warn "Existing team knowledge was preserved; review $conflict_file"
+      continue
+    fi
+    mkdir -p "$(dirname "$destination_file")"
+    cp "$source_file" "$destination_file"
+  done < <(find "$knowledge_source" -type f -print0)
+  info "Installed team knowledge overlay"
+}
+
+install_extra_skills() {
+  local destination="$PROJECT_DIR/$(skills_dir)"
+  local source_root
+  local skill_dir
+  local skill_name
+  for source_root in "$EXTENSIONS_DIR/skills" "$EXTENSIONS_DIR/workflows"; do
+    [[ -d "$source_root" ]] || continue
+    for skill_dir in "$source_root"/*/; do
+      [[ -f "$skill_dir/SKILL.md" ]] || continue
+      skill_name="$(basename "$skill_dir")"
+      copy_tree_contents "$skill_dir" "$destination/$skill_name"
+      info "Installed team skill: $skill_name"
     done
-  fi
-}
-
-# ── Install extension skills into IDE skills directory ────────────────────────
-# Called after install_superpowers so extension skills layer on top of upstream.
-# Source: extensions/skills/<skill-name>/  (committed, user-maintained)
-# Dest:   same IDE skills directory that install_superpowers wrote to
-install_extension_skills() {
-  local ext_skills_dir="$EXTENSIONS_DIR/skills"
-  [[ -d "$ext_skills_dir" ]] || return 0   # nothing to install
-
-  # Count skill dirs that actually contain a SKILL.md
-  local count=0
-  for d in "$ext_skills_dir"/*/; do
-    [[ -f "$d/SKILL.md" ]] && count=$((count + 1))
   done
-  [[ $count -eq 0 ]] && return 0
-
-  section "Installing extension skills"
-
-  local home_dir="$HOME"
-  local clone_dir="$home_dir/.codex/superpowers"
-
-  case "$IDE" in
-    kiro)
-      local dest=".kiro/steering/superpowers-skills"
-      mkdir -p "$dest"
-      for skill_dir in "$ext_skills_dir"/*/; do
-        [[ -f "$skill_dir/SKILL.md" ]] || continue   # skip dirs without a SKILL.md
-        skill_name="$(basename "$skill_dir")"
-        cp -R "$skill_dir" "$dest/$skill_name"
-        # Inject inclusion: manual so Kiro doesn't auto-load extension skills either
-        inject_inclusion_manual "$dest/$skill_name/SKILL.md"
-        info "Installed extension skill: $skill_name → $dest/ (inclusion: manual)"
-      done
-      ;;
-    amazonq)
-      local dest=".amazonq/rules/superpowers-skills"
-      mkdir -p "$dest"
-      for skill_dir in "$ext_skills_dir"/*/; do
-        [[ -f "$skill_dir/SKILL.md" ]] || continue
-        skill_name="$(basename "$skill_dir")"
-        cp -R "$skill_dir" "$dest/$skill_name"
-        info "Installed extension skill: $skill_name → $dest/"
-      done
-      ;;
-    claudecode)
-      local dest=".claude/skills"
-      mkdir -p "$dest"
-      for skill_dir in "$ext_skills_dir"/*/; do
-        [[ -f "$skill_dir/SKILL.md" ]] || continue
-        skill_name="$(basename "$skill_dir")"
-        rm -rf "$dest/$skill_name"
-        cp -R "$skill_dir" "$dest/$skill_name"
-        info "Installed extension skill: $skill_name → $dest/"
-      done
-      ;;
-    copilot)
-      local dest=".github/skills"
-      mkdir -p "$dest"
-      for skill_dir in "$ext_skills_dir"/*/; do
-        [[ -f "$skill_dir/SKILL.md" ]] || continue
-        skill_name="$(basename "$skill_dir")"
-        cp -R "$skill_dir" "$dest/$skill_name"
-        # Inject inclusion:manual (Kiro also reads .github/skills/)
-        inject_inclusion_manual "$dest/$skill_name/SKILL.md"
-        info "Installed extension skill: $skill_name → $dest/ (inclusion: manual)"
-      done
-      ;;
-    cursor|cline|codex|*)
-      # These IDEs use the global ~/.agents/skills/superpowers/ path.
-      # Copy extension skills alongside upstream skills in the global symlink target.
-      local global_skills="$home_dir/.agents/skills/superpowers"
-      if [[ -d "$global_skills" || -L "$global_skills" ]]; then
-        # Resolve symlink to actual directory
-        local real_skills
-        real_skills="$(readlink -f "$global_skills" 2>/dev/null || echo "$global_skills")"
-        for skill_dir in "$ext_skills_dir"/*/; do
-          [[ -f "$skill_dir/SKILL.md" ]] || continue
-          skill_name="$(basename "$skill_dir")"
-          cp -R "$skill_dir" "$real_skills/$skill_name"
-          info "Installed extension skill: $skill_name → $real_skills/"
-        done
-      else
-        warn "Global skills directory not found — extension skills not installed for $IDE"
-        warn "Run setup again after Superpowers is cloned, or copy manually:"
-        warn "  cp -R $ext_skills_dir/* ~/.agents/skills/superpowers/"
-      fi
-      ;;
-  esac
 }
 
-# ── Install workflow skills into IDE skills directory ─────────────────────────
-# Workflow skills live in extensions/workflows/<workflow-name>/SKILL.md.
-# They are installed into the same IDE skills directory as extension skills,
-# so they are available on demand without any extra configuration.
-# Source: extensions/workflows/<workflow-name>/  (committed, user-maintained)
-install_workflow_skills() {
-  local workflows_dir="$EXTENSIONS_DIR/workflows"
-  [[ -d "$workflows_dir" ]] || return 0   # nothing to install
-
-  # Count workflow dirs that actually contain a SKILL.md
-  local count=0
-  for d in "$workflows_dir"/*/; do
-    [[ -f "$d/SKILL.md" ]] && count=$((count + 1))
+install_copilot_skills() {
+  local destination="$HOME/.copilot/skills"
+  local source_root
+  local skill_dir
+  local skill_name
+  for source_root in "$EXTENSIONS_DIR/skills" "$EXTENSIONS_DIR/workflows"; do
+    [[ -d "$source_root" ]] || continue
+    for skill_dir in "$source_root"/*/; do
+      [[ -f "$skill_dir/SKILL.md" ]] || continue
+      skill_name="$(basename "$skill_dir")"
+      copy_tree_contents "$skill_dir" "$destination/$skill_name"
+      info "Installed global Copilot skill: $skill_name"
+    done
   done
-  [[ $count -eq 0 ]] && return 0
-
-  section "Installing workflow skills"
-
-  local home_dir="$HOME"
-
-  case "$IDE" in
-    kiro)
-      local dest=".kiro/steering/superpowers-skills"
-      mkdir -p "$dest"
-      for wf_dir in "$workflows_dir"/*/; do
-        [[ -f "$wf_dir/SKILL.md" ]] || continue
-        wf_name="$(basename "$wf_dir")"
-        cp -R "$wf_dir" "$dest/$wf_name"
-        inject_inclusion_manual "$dest/$wf_name/SKILL.md"
-        info "Installed workflow skill: $wf_name → $dest/ (inclusion: manual)"
-      done
-      ;;
-    amazonq)
-      local dest=".amazonq/rules/superpowers-skills"
-      mkdir -p "$dest"
-      for wf_dir in "$workflows_dir"/*/; do
-        [[ -f "$wf_dir/SKILL.md" ]] || continue
-        wf_name="$(basename "$wf_dir")"
-        cp -R "$wf_dir" "$dest/$wf_name"
-        info "Installed workflow skill: $wf_name → $dest/"
-      done
-      ;;
-    claudecode)
-      local dest=".claude/skills"
-      mkdir -p "$dest"
-      for wf_dir in "$workflows_dir"/*/; do
-        [[ -f "$wf_dir/SKILL.md" ]] || continue
-        wf_name="$(basename "$wf_dir")"
-        rm -rf "$dest/$wf_name"
-        cp -R "$wf_dir" "$dest/$wf_name"
-        info "Installed workflow skill: $wf_name → $dest/"
-      done
-      ;;
-    copilot)
-      local dest=".github/skills"
-      mkdir -p "$dest"
-      for wf_dir in "$workflows_dir"/*/; do
-        [[ -f "$wf_dir/SKILL.md" ]] || continue
-        wf_name="$(basename "$wf_dir")"
-        cp -R "$wf_dir" "$dest/$wf_name"
-        inject_inclusion_manual "$dest/$wf_name/SKILL.md"
-        info "Installed workflow skill: $wf_name → $dest/ (inclusion: manual)"
-      done
-      ;;
-    cursor|cline|codex|*)
-      local global_skills="$home_dir/.agents/skills/superpowers"
-      if [[ -d "$global_skills" || -L "$global_skills" ]]; then
-        local real_skills
-        real_skills="$(readlink -f "$global_skills" 2>/dev/null || echo "$global_skills")"
-        for wf_dir in "$workflows_dir"/*/; do
-          [[ -f "$wf_dir/SKILL.md" ]] || continue
-          wf_name="$(basename "$wf_dir")"
-          cp -R "$wf_dir" "$real_skills/$wf_name"
-          info "Installed workflow skill: $wf_name → $real_skills/"
-        done
-      else
-        warn "Global skills directory not found — workflow skills not installed for $IDE"
-        warn "Run setup again after Superpowers is cloned, or copy manually:"
-        warn "  cp -R $workflows_dir/* ~/.agents/skills/superpowers/"
-      fi
-      ;;
-  esac
 }
 
-# copy_relevant_skills <src_skills_dir> <dest_dir>
-# Copies only the Superpowers skills that are relevant when AIDLC is the planning
-# layer. Skills that duplicate AIDLC stages or are Superpowers-internal tooling
-# are excluded to avoid confusion and unnecessary context loading.
-#
-# Excluded (AIDLC replaces them):
-#   brainstorming      — AIDLC Inception covers requirements + design
-#   writing-plans      — AIDLC Code Generation Part 1 is the plan stage
-#   executing-plans    — fallback for no-subagent platforms; AIDLC uses subagent-driven-development
-#   writing-skills     — meta-skill for Superpowers contributors, not end users
-copy_relevant_skills() {
-  local src="$1"
-  local dest="$2"
-  local excluded="brainstorming writing-plans executing-plans writing-skills"
+rewrite_copilot_markdown() {
+  local source_file="$1"
+  local destination_file="$2"
+  local runtime_ref='$HOME/.copilot/aidlc/runtime/.claude'
+  mkdir -p "$(dirname "$destination_file")"
+  sed -E \
+    -e 's#bun \.claude/tools/aidlc-orchestrate\.ts#bun "$HOME/.copilot/aidlc/aidlc-copilot-runner.ts" orchestrate#g' \
+    -e 's#bun \.claude/tools/([A-Za-z0-9._-]+\.ts)#bun "$HOME/.copilot/aidlc/aidlc-copilot-runner.ts" tool \1#g' \
+    -e "s#\\.claude/#$runtime_ref/#g" \
+    "$source_file" > "$destination_file"
+}
 
-  mkdir -p "$dest"
-  for skill_dir in "$src"/*/; do
-    local skill_name
+install_copilot_vendored_skills() {
+  local source_root="$AIDLC_SOURCE_DIR/dist/claude/.claude/skills"
+  local destination="$HOME/.copilot/skills"
+  local skill_dir
+  local skill_name
+  for skill_dir in "$source_root"/*/; do
+    [[ -f "$skill_dir/SKILL.md" ]] || continue
     skill_name="$(basename "$skill_dir")"
-    # Skip excluded skills
-    local skip=false
-    for ex in $excluded; do
-      [[ "$skill_name" == "$ex" ]] && skip=true && break
-    done
-    $skip && continue
-    cp -R "$skill_dir" "$dest/$skill_name"
+    rm -rf "$destination/$skill_name"
+    copy_tree_contents "$skill_dir" "$destination/$skill_name"
+    rewrite_copilot_markdown "$skill_dir/SKILL.md" "$destination/$skill_name/SKILL.md"
+    if grep -Fq 'bun .claude/tools/' "$destination/$skill_name/SKILL.md"; then
+      die "Copilot skill still contains a project-local Claude tool path: $destination/$skill_name/SKILL.md"
+    fi
+    info "Installed global Copilot skill: $skill_name"
   done
 }
-install_superpowers() {
-  section "Installing Superpowers (obra/superpowers)"
-  require git "Install git: https://git-scm.com"
 
-  local home_dir="$HOME"
-  local clone_dir="$home_dir/.codex/superpowers"
-  local skills_dir="$home_dir/.agents/skills"
-  local symlink_target="$skills_dir/superpowers"
-
-  # Clone or update
-  if [[ -d "$clone_dir/.git" ]]; then
-    info "Superpowers already cloned at $clone_dir — pulling latest"
-    git -C "$clone_dir" pull --quiet || warn "Could not pull latest Superpowers (network issue?) — using existing clone"
-  else
-    info "Cloning obra/superpowers to $clone_dir"
-    git clone --quiet --depth=1 https://github.com/obra/superpowers.git "$clone_dir"
-  fi
-
-  # Always create ~/.agents/skills/ symlink (cross-IDE standard path)
-  mkdir -p "$skills_dir"
-  if [[ -L "$symlink_target" ]]; then
-    info "Symlink already exists at $symlink_target"
-  elif [[ -e "$symlink_target" ]]; then
-    warn "$symlink_target exists but is not a symlink — skipping global symlink"
-  else
-    ln -s "$clone_dir/skills" "$symlink_target" \
-      && info "Created symlink: $symlink_target → $clone_dir/skills" \
-      || warn "Could not create symlink (try running as Administrator on Windows)"
-  fi
-
-  # IDE-specific: copy skills into the IDE's native skills/steering directory
-  # so they are visible in the IDE UI and auto-loaded without plugin install
-  case "$IDE" in
-    kiro)
-      local kiro_skills=".kiro/steering/superpowers-skills"
-      if [[ -d "$kiro_skills" ]]; then
-        rm -rf "$kiro_skills"
-      fi
-      copy_relevant_skills "$clone_dir/skills" "$kiro_skills"
-      while IFS= read -r -d '' skill_file; do
-        inject_inclusion_manual "$skill_file"
-      done < <(find "$kiro_skills" -name "SKILL.md" -print0)
-      info "Copied Superpowers skills to $kiro_skills (inclusion: manual — loaded on demand)"
-      ;;
-    amazonq)
-      local q_skills=".amazonq/rules/superpowers-skills"
-      if [[ -d "$q_skills" ]]; then
-        rm -rf "$q_skills"
-      fi
-      copy_relevant_skills "$clone_dir/skills" "$q_skills"
-      info "Copied Superpowers skills to $q_skills"
-      ;;
-    claudecode)
-      local claude_skills=".claude/skills"
-      mkdir -p "$claude_skills"
-      for skill_dir in "$clone_dir/skills"/*/; do
-        skill_name="$(basename "$skill_dir")"
-        rm -rf "$claude_skills/$skill_name"
-      done
-      copy_relevant_skills "$clone_dir/skills" "$claude_skills"
-      info "Copied Superpowers skills to $claude_skills"
-      info "Claude Code also supports the plugin marketplace:"
-      info "  /plugin install superpowers@claude-plugins-official"
-      ;;
-    cursor)
-      info "Cursor uses ~/.agents/skills/ for skill discovery"
-      info "Cursor also supports the plugin marketplace:"
-      info "  /add-plugin superpowers  (in Cursor Agent chat)"
-      ;;
-    copilot)
-      local copilot_skills=".github/skills"
-      if [[ -d "$copilot_skills" ]]; then
-        rm -rf "$copilot_skills"
-      fi
-      copy_relevant_skills "$clone_dir/skills" "$copilot_skills"
-      # Inject inclusion:manual into every SKILL.md
-      while IFS= read -r -d '' skill_file; do
-        inject_inclusion_manual "$skill_file"
-      done < <(find "$copilot_skills" -name "SKILL.md" -print0)
-      info "Copied Superpowers skills to $copilot_skills/ (inclusion: manual — Kiro-safe)"
-      info "Skills are also available at ~/.agents/skills/superpowers/ for CLI use"
-      ;;
-  esac
-
-  info "Superpowers skills available at ~/.agents/skills/superpowers/"
-  info "To update later: cd $clone_dir && git pull"
+install_copilot_agents() {
+  local source_root="$AIDLC_SOURCE_DIR/dist/claude/.claude/agents"
+  local destination="$HOME/.copilot/agents"
+  local source_file
+  local agent_name
+  mkdir -p "$destination"
+  rm -f "$destination"/aidlc-*.agent.md
+  for source_file in "$source_root"/aidlc-*-agent.md; do
+    [[ -f "$source_file" ]] || continue
+    agent_name="$(basename "$source_file" .md)"
+    rewrite_copilot_markdown "$source_file" "$destination/$agent_name.agent.md"
+    info "Installed global Copilot agent: $agent_name"
+  done
 }
 
-# ── Install Caveman skill from upstream ──────────────────────────────────────
-# Source: JuliusBrussee/caveman (cloned to ~/.codex/caveman)
-# The skill lives at skills/caveman/SKILL.md in that repo.
-install_caveman() {
-  section "Installing Caveman skill (JuliusBrussee/caveman)"
-  require git "Install git: https://git-scm.com"
+install_copilot_hooks() {
+  local destination="$HOME/.copilot/hooks/ai-dlc.json"
+  mkdir -p "$(dirname "$destination")"
+  printf '%s\n' '{' > "$destination"
+  printf '%s\n' '  "hooks": {' >> "$destination"
+  printf '%s\n' '    "SessionStart": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" session-start"}], ' >> "$destination"
+  printf '%s\n' '    "UserPromptSubmit": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" mint"}], ' >> "$destination"
+  printf '%s\n' '    "PreToolUse": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" pretool"}], ' >> "$destination"
+  printf '%s\n' '    "PostToolUse": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" posttool"}], ' >> "$destination"
+  printf '%s\n' '    "PreCompact": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" precompact"}], ' >> "$destination"
+  printf '%s\n' '    "SubagentStop": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" subagent-stop"}], ' >> "$destination"
+  printf '%s\n' '    "Stop": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" stop"}]' >> "$destination"
+  printf '%s\n' '  }' >> "$destination"
+  printf '%s\n' '}' >> "$destination"
+  info "Installed global Copilot hooks"
+}
 
-  local home_dir="$HOME"
-  local clone_dir="$home_dir/.codex/caveman"
-
-  # Clone or update
-  if [[ -d "$clone_dir/.git" ]]; then
-    info "Caveman already cloned at $clone_dir — pulling latest"
-    git -C "$clone_dir" pull --quiet || warn "Could not pull latest Caveman (network issue?) — using existing clone"
-  else
-    info "Cloning JuliusBrussee/caveman to $clone_dir"
-    git clone --quiet --depth=1 "$CAVEMAN_REPO" "$clone_dir"
+install_copilot_global() {
+  section "Installing AI-DLC for GitHub Copilot in VS Code"
+  local distribution="$AIDLC_SOURCE_DIR/dist/claude"
+  local runtime="$COPILOT_ROOT/runtime/.claude"
+  rm -rf "$COPILOT_ROOT/runtime" "$COPILOT_ROOT/memory-seed" "$COPILOT_ROOT/knowledge"
+  mkdir -p "$COPILOT_ROOT"
+  copy_tree_contents "$distribution/.claude" "$runtime"
+  copy_tree_contents "$distribution/aidlc/spaces/default/memory" "$COPILOT_ROOT/memory-seed"
+  install_org_rules_at "$COPILOT_ROOT/memory-seed/team.md"
+  if [[ -d "$EXTENSIONS_DIR/knowledge" ]]; then
+    copy_tree_contents "$EXTENSIONS_DIR/knowledge" "$COPILOT_ROOT/knowledge"
   fi
-
-  local skill_src="$clone_dir/skills/caveman"
-  [[ -f "$skill_src/SKILL.md" ]] || { warn "Caveman SKILL.md not found at $skill_src — repo structure may have changed"; return 0; }
-
-  case "$IDE" in
-    kiro)
-      local dest=".kiro/steering/superpowers-skills/caveman"
-      rm -rf "$dest"
-      cp -R "$skill_src" "$dest"
-      inject_inclusion_manual "$dest/SKILL.md"
-      info "Installed caveman skill → $dest (inclusion: manual)"
-      ;;
-    amazonq)
-      local dest=".amazonq/rules/superpowers-skills/caveman"
-      rm -rf "$dest"
-      cp -R "$skill_src" "$dest"
-      info "Installed caveman skill → $dest"
-      ;;
-    claudecode)
-      local dest=".claude/skills/caveman"
-      rm -rf "$dest"
-      cp -R "$skill_src" "$dest"
-      info "Installed caveman skill → $dest"
-      ;;
-    copilot)
-      local dest=".github/skills/caveman"
-      rm -rf "$dest"
-      cp -R "$skill_src" "$dest"
-      inject_inclusion_manual "$dest/SKILL.md"
-      info "Installed caveman skill → $dest (inclusion: manual)"
-      ;;
-    cursor|cline|codex|*)
-      local global_skills="$home_dir/.agents/skills/superpowers"
-      if [[ -d "$global_skills" || -L "$global_skills" ]]; then
-        local real_skills
-        real_skills="$(readlink -f "$global_skills" 2>/dev/null || echo "$global_skills")"
-        rm -rf "$real_skills/caveman"
-        cp -R "$skill_src" "$real_skills/caveman"
-        info "Installed caveman skill → $real_skills/caveman"
-      else
-        warn "Global skills directory not found — caveman skill not installed for $IDE"
-      fi
-      ;;
-  esac
+  cp "$SCRIPT_DIR/scripts/copilot/aidlc-copilot-runtime.ts" "$COPILOT_ROOT/"
+  cp "$SCRIPT_DIR/scripts/copilot/aidlc-copilot-runner.ts" "$COPILOT_ROOT/"
+  cp "$SCRIPT_DIR/scripts/copilot/aidlc-copilot-hook.ts" "$COPILOT_ROOT/"
+  install_copilot_vendored_skills
+  install_copilot_skills
+  install_copilot_agents
+  mkdir -p "$HOME/.copilot/instructions"
+  cp "$EXTENSIONS_DIR/copilot/ai-dlc.instructions.md" "$HOME/.copilot/instructions/"
+  install_copilot_hooks
+  [[ -f "$COPILOT_ROOT/runtime/.claude/tools/aidlc-utility.ts" ]] \
+    || die "Copilot runtime is missing the AI-DLC utility"
+  [[ -f "$HOME/.copilot/skills/aidlc/SKILL.md" ]] \
+    || die "Copilot /aidlc skill was not installed"
+  [[ -f "$HOME/.copilot/agents/aidlc-developer-agent.agent.md" ]] \
+    || die "Copilot AI-DLC agents were not installed"
+  info "Approved runtime installed at $COPILOT_ROOT"
 }
 
-# ── Cleanup ───────────────────────────────────────────────────────────────────
-cleanup() {
-  rm -rf "$TMPDIR_WORK"
+warn_about_legacy_workspace() {
+  if [[ -f "$PROJECT_DIR/aidlc-docs/aidlc-state.md" ]]; then
+    warn "Detected v1 aidlc-docs/ state. AI-DLC v2 can migrate it on the first workflow run; make a branch or backup first."
+  fi
 }
+
+run_doctor() {
+  if [[ "$IDE" == "copilot" ]]; then
+    info "Copilot global install checks passed"
+    return 0
+  fi
+  $SKIP_DOCTOR && { warn "Skipped AI-DLC doctor by request"; return 0; }
+  require bun "Install Bun before installing AI-DLC v2."
+  local tool_dir
+  tool_dir="$PROJECT_DIR/$(harness_dir)/tools/aidlc-utility.ts"
+  [[ -f "$tool_dir" ]] || die "AI-DLC utility not found after installation: $tool_dir"
+  section "Running AI-DLC doctor"
+  (cd "$PROJECT_DIR" && bun "$tool_dir" doctor)
+}
+
+cleanup() { rm -rf "$TMPDIR_WORK"; }
 trap cleanup EXIT
 
-# ── Remove stale entry-point files from other IDEs ────────────────────────────
-# Each IDE writes its workflow rules to a specific file/directory. When you
-# switch IDEs (or re-run setup for a different one), the old files stay on disk
-# and confuse agents into thinking there are multiple entry points.
-# This function removes every entry-point artifact that does NOT belong to the
-# currently selected IDE.
-remove_stale_entrypoints() {
-  section "Removing stale entry-point files for other IDEs"
-
-  # ── Mid-workflow IDE switch warning ─────────────────────────────────────────
-  # If aidlc-docs/aidlc-state.md exists, a workflow is in progress.
-  # Switching IDEs is safe (aidlc-docs/ is never touched), but the agent needs
-  # to be told to re-read the state file after the switch.
-  if [[ -f "aidlc-docs/aidlc-state.md" ]]; then
-    # Detect whether any OTHER IDE's entry point currently exists on disk
-    # (i.e. this is actually a switch, not just a re-install for the same IDE)
-    local other_ide_found=false
-    local other_ide_name=""
-    local switch_checks=(
-      "kiro:.kiro/steering/aidlc-workflow.md"
-      "amazonq:.amazonq/rules/aws-aidlc-rules"
-      "cursor:.cursor/rules/ai-dlc-workflow.mdc"
-      "cline:.clinerules/core-workflow.md"
-      "claudecode:CLAUDE.md"
-      "copilot:.github/copilot-instructions.md"
-      "codex:AGENTS.md"
-    )
-    for entry in "${switch_checks[@]}"; do
-      local owner="${entry%%:*}"
-      local path="${entry#*:}"
-      if [[ "$owner" != "$IDE" && -e "$path" ]]; then
-        other_ide_found=true
-        other_ide_name="$owner"
-        break
-      fi
-    done
-
-    if $other_ide_found; then
-      echo
-      echo "  ⚠ ─────────────────────────────────────────────────────────────"
-      echo "  ⚠  MID-WORKFLOW IDE SWITCH DETECTED"
-      echo "  ⚠"
-      echo "  ⚠  A workflow is in progress (aidlc-docs/aidlc-state.md exists)"
-      echo "  ⚠  and you are switching from '$other_ide_name' to '$IDE'."
-      echo "  ⚠"
-      echo "  ⚠  Your planning artifacts in aidlc-docs/ are safe — they will"
-      echo "  ⚠  not be modified. However, after setup completes you MUST"
-      echo "  ⚠  tell the agent to resume the workflow:"
-      echo "  ⚠"
-      echo "  ⚠    'Using AI-DLC, continue work on <your feature>'"
-      echo "  ⚠"
-      echo "  ⚠  The agent will read aidlc-docs/aidlc-state.md and pick up"
-      echo "  ⚠  from the last checkpoint. Do NOT start a new workflow."
-      echo "  ⚠ ─────────────────────────────────────────────────────────────"
-      echo
-    fi
+main() {
+  parse_args "$@"
+  [[ -n "$IDE" ]] && normalise_ide
+  ensure_project
+  detect_ide
+  normalise_ide
+  info "Selected harness: $IDE"
+  ensure_aidlc_source
+  if [[ "$IDE" == "copilot" ]]; then
+    install_copilot_global
+  else
+    install_distribution
+    install_org_rules
+    install_extra_knowledge
+    install_extra_skills
   fi
+  warn_about_legacy_workspace
+  run_doctor
 
-  # Map: IDE → its entry-point file/dir (the one we DO NOT remove for $IDE)
-  # Format: "ide:path_to_remove"
-  # Each entry is "owner:path". Only paths whose owner != $IDE are removed.
-  # All generated paths are safe to delete — nothing here is a committed asset.
-  local all_entrypoints=(
-    "kiro:.kiro/steering/aidlc-workflow.md"
-    "kiro:.kiro/aws-aidlc-rule-details"
-    "kiro:.kiro/steering/superpowers-skills"
-    "amazonq:.amazonq/rules/aws-aidlc-rules"
-    "amazonq:.amazonq/aws-aidlc-rule-details"
-    "amazonq:.amazonq/rules/superpowers-skills"
-    "cursor:.cursor/rules/ai-dlc-workflow.mdc"
-    "cline:.clinerules/core-workflow.md"
-    "claudecode:CLAUDE.md"
-    "claudecode:.claude/skills"
-    "copilot:.github/copilot-instructions.md"
-    "copilot:.github/skills"
-    "codex:AGENTS.md"
-  )
-
-  # .aidlc-rule-details is shared by cursor/cline/claudecode/copilot/codex
-  # Only remove it when switching TO kiro or amazonq (which use their own paths)
-  if [[ "$IDE" == "kiro" || "$IDE" == "amazonq" ]]; then
-    if [[ -e ".aidlc-rule-details" ]]; then
-      rm -rf ".aidlc-rule-details"
-      info "Removed .aidlc-rule-details (not used by $IDE)"
-    fi
+  printf '\nAI-DLC v2 installation complete.\n'
+  printf '  Harness: %s\n' "$IDE"
+  printf '  Version: %s (%s)\n' "$LOCK_AIDLC_VERSION" "$LOCK_AIDLC_COMMIT"
+  if [[ "$IDE" == "copilot" ]]; then
+    printf '  Global runtime: %s\n' "$COPILOT_ROOT"
+    printf '  Start: open any project in VS Code and type /aidlc <description>\n'
+  else
+    printf '  Workspace: %s/aidlc\n' "$PROJECT_DIR"
+    printf '  Start: /aidlc <description>\n'
   fi
-
-  local removed=0
-  for entry in "${all_entrypoints[@]}"; do
-    local owner="${entry%%:*}"
-    local path="${entry#*:}"
-    # Skip the entry that belongs to the current IDE
-    [[ "$owner" == "$IDE" ]] && continue
-    if [[ -e "$path" ]]; then
-      rm -rf "$path"
-      info "Removed stale: $path (was for $owner)"
-      removed=$((removed + 1))
-    fi
-  done
-
-  [[ $removed -eq 0 ]] && info "No stale entry-point files found"
+  printf '  Update: ./setup.sh --update --project-dir <path>\n'
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-echo
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  AI-DLC + Superpowers Setup                          ║"
-echo "╚══════════════════════════════════════════════════════╝"
-
-detect_ide
-info "Detected IDE: $IDE"
-
-if $UPDATE_ONLY; then
-  section "Update mode — re-pulling upstreams only"
-  download_aidlc
-  install_aidlc
-  install_superpowers
-  install_workflow_skills
-  install_caveman
-  info "Upstreams updated. Extensions unchanged."
-else
-  download_aidlc
-  install_aidlc
-  install_extensions
-  install_superpowers
-  install_extension_skills
-  install_workflow_skills
-  install_caveman
-  remove_stale_entrypoints
-fi
-
-echo
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  Setup complete                                      ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo
-echo "  Planning layer:   awslabs/aidlc-workflows (upstream)"
-echo "  Execution layer:  obra/superpowers → ~/.agents/skills/superpowers/"
-echo "  Extensions:       extensions/ (this repo)"
-echo
-echo "  Start a workflow: 'Using AI-DLC, [describe your task]'"
-echo
-if $WITH_JIRA || $WITH_CONFLUENCE; then
-  echo "  Atlassian MCP:    install in your IDE user settings, see docs/WORKING-WITH-INTEGRATIONS.md"
-  echo
-fi
-echo "  To update upstreams: ./setup.sh --update"
-echo
+main "$@"

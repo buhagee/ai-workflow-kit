@@ -1,0 +1,4 @@
+LOCK_AIDLC_REPO="https://github.com/awslabs/aidlc-workflows"
+LOCK_AIDLC_REF="v2"
+LOCK_AIDLC_COMMIT="c38ba24aa5633b4071fb15b5d654cdb9c7aa9b51"
+LOCK_AIDLC_VERSION="2.5.10"

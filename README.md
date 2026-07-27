@@ -1,321 +1,251 @@
-# AI-DLC + Superpowers Workflow
+# AI-DLC Workflow Kit
 
-A zero-maintenance AI development workflow that combines two upstream open-source
-projects with a thin extension layer for integrations and org-specific rules.
+A team distribution layer for [AI-DLC Workflows v2](https://github.com/awslabs/aidlc-workflows/tree/v2).
+The kit keeps the upstream workflow intact while distributing organization-owned
+rules, knowledge, and skills across projects.
 
-## What this repo is
+## Design
 
-This repo contains **only what you need to maintain yourself**:
+The kit follows the whitepaper's extensibility and learning model:
 
-- `extensions/glue/` — handoff rule + **entry-point preamble** prepended to every IDE's workflow file
-- `extensions/skills/` — custom skills installed alongside upstream Superpowers skills
-- `extensions/integrations/` — optional Jira and Confluence sync
-- `extensions/org-standards/` — your team's custom rules (add your own here)
-- `setup.sh` — assembles both upstream layers + your extensions into the IDE-specific entry point
-
-Everything else is upstream:
-
-| Layer | Source | What it does |
-|---|---|---|
-| Planning | [awslabs/aidlc-workflows](https://github.com/awslabs/aidlc-workflows) | Inception → Construction → Operations phases |
-| Execution | [obra/superpowers](https://github.com/obra/superpowers) | TDD, debugging, subagent dispatch, code review |
-
-### How entry points are assembled
-
-`setup.sh` builds the IDE-specific entry point by concatenating:
-
-```
-extensions/glue/entry-point-preamble.md   ← always first (mandatory gates)
-+
-upstream core-workflow.md                 ← AIDLC planning rules
-=
-.github/copilot-instructions.md           ← (or CLAUDE.md, AGENTS.md, etc.)
+```text
+AI-DLC v2 distribution       upstream baseline: engine, stages, agents, hooks
+        +
+Team overlays                organization rules, domain knowledge, skills
+        +
+Project workspace            aidlc/ spaces, intents, artifacts, and learnings
 ```
 
-Skills are assembled the same way:
+The approved upstream source, including its generated `dist/<harness>/` trees, is
+vendored under `vendor/aidlc-workflows/` at the reviewed revision in
+[upstream.lock](upstream.lock). Developer setup is offline: it never clones or
+fetches upstream. The installer never patches `core/`, rewrites the upstream
+conductor, or replaces project learning data.
 
-```
-upstream superpowers skills               ← obra/superpowers
-+
-extensions/skills/<your-skills>/          ← your custom skills
-=
-.github/skills/                           ← (or .kiro/steering/superpowers-skills/, etc.)
-```
+## Supported Harnesses
 
-The generated files are **not committed** — re-created by `./setup.sh`.
-To customise the entry point for all IDEs, edit `extensions/glue/entry-point-preamble.md`.
-To add a custom skill for all IDEs, add it under `extensions/skills/`.
+AI-DLC v2 currently ships official distributions for:
 
-## Quick start
+- Claude Code: `--ide claude`
+- GitHub Copilot in VS Code: `--ide copilot`
+- Kiro IDE: `--ide kiro-ide`
+- Kiro CLI: `--ide kiro-cli`
+- Codex CLI: `--ide codex`
+- opencode: `--ide opencode`
+
+GitHub Copilot uses the kit's reviewed global adapter rather than an upstream
+AI-DLC distribution. Cursor, Cline, and Amazon Q are not supported.
+
+## Install
+
+Install Bun and Git first. AI-DLC v2 runs natively on Windows; the installer uses
+Bash through Git for Windows so the same distribution command works on every team
+machine.
+
+From Git Bash (including Windows):
 
 ```bash
-# Install for your current IDE (auto-detected)
-./setup.sh
-
-# With Jira integration
-./setup.sh --with-jira
-
-# With Confluence integration
-./setup.sh --with-confluence
-
-# Both
-./setup.sh --with-jira --with-confluence
-
-# Force a specific IDE
-./setup.sh --ide cursor   # kiro | amazonq | cursor | cline | claudecode | copilot | codex
+./setup.sh --ide claude --project-dir ../my-project
+./setup.sh --ide copilot
+./setup.sh --ide kiro-ide --project-dir ../my-project
+./setup.sh --ide codex --project-dir ../my-project
 ```
 
-> **Windows users:** `setup.sh` requires bash. Use Git Bash, WSL, or run inside a
-> Docker container (`docker run --rm -v $(pwd):/repo -w /repo ubuntu:22.04 bash setup.sh`).
-> Native PowerShell is not supported.
+The installer:
 
-```
-Using AI-DLC, build a user authentication system
-```
+1. Reads the reviewed, vendored AI-DLC v2 source.
+2. Copies the selected native harness distribution.
+3. Copies the neutral `aidlc/` workspace shell without overwriting project records.
+4. Applies organization rules as managed blocks in `aidlc/spaces/default/memory/team.md`.
+5. Installs team knowledge and custom skills.
+6. Runs the harness-specific AI-DLC doctor check.
 
-The agent handles the rest — requirements, design, planning, subagent execution,
-code review, and optionally Jira/Confluence sync.
+For Copilot, setup installs the approved runtime, the full reviewed AI-DLC
+skill set, AI-DLC custom agents, organization instructions, hooks, and team
+skills such as `estimation` and `caveman` under the developer profile:
 
-**New to this repo?** See [docs/ONBOARDING.md](docs/ONBOARDING.md) for a
-step-by-step guide covering prerequisites, IDE setup, credential configuration,
-and day-to-day usage.
-
-## Day-to-day usage
-
-### Starting an AIDLC development session
-
-Prefix your request with `Using AI-DLC` to trigger the full planning workflow:
-
-```
-Using AI-DLC, build a REST API for user authentication with JWT tokens
-Using AI-DLC, add dark mode support to the settings page
-Using AI-DLC, refactor the payment service to use the new Stripe SDK
+```text
+~/.copilot/aidlc/
+~/.copilot/skills/
+~/.copilot/instructions/
+~/.copilot/hooks/
 ```
 
-To resume a session that was interrupted:
+It does not copy the engine or skills into the project. The first `/aidlc`
+invocation creates only the project's `aidlc/` workspace and intent records.
 
-```
-Using AI-DLC, continue work on the authentication feature
-```
+Start a workflow from the selected harness with:
 
-The agent reads `aidlc-docs/aidlc-state.md` and picks up from the last checkpoint.
-
-### Invoking skills on demand
-
-Skills are invoked by describing what you want in plain language — the agent
-recognises the trigger phrases and loads the skill automatically.
-
-#### Caveman mode — ultra-compressed responses ([upstream](https://github.com/JuliusBrussee/caveman))
-
-Cuts response verbosity ~75% while keeping full technical accuracy. Useful when
-you want fast, dense answers without filler.
-
-```
-caveman mode
-/caveman
-use caveman
+```text
+/aidlc Build a user authentication service
 ```
 
-Switch intensity:
+Codex uses `$aidlc` instead of `/aidlc`.
 
-```
-/caveman lite    # professional but tight — keeps full sentences
-/caveman full    # classic caveman (default)
-/caveman ultra   # maximum compression — arrows for causality, abbreviations
-```
+## Developer Workflow
 
-Turn off: `stop caveman` or `normal mode`
+For the primary VS Code Copilot setup, a developer does this once per machine
+from Git Bash:
 
-#### Estimation workflow
-
-Produces a billable-hours estimate from a plain description or from AIDLC
-units-of-work artifacts generated during Inception.
-
-```
-Using the agent-estimation skill, estimate the effort for:
-[your project description]
+```powershell
+git clone <workflow-kit-url>
+cd ai-workflow-kit
+./setup.sh --ide copilot
 ```
 
-See [extensions/workflows/estimation/how-to-use.md](extensions/workflows/estimation/how-to-use.md)
-for full options including post-Inception mode (higher accuracy).
+Then, for normal project work:
 
-#### Other Superpowers skills
+1. Open the target project in VS Code.
+2. Open Copilot Chat and type `/aidlc` followed by the task, for example:
+    `/aidlc Build the monitoring API`.
+3. Approve or revise each AI-DLC stage when prompted.
+4. Let the workflow create project state under `aidlc/`; do not copy the runtime
+    or skill files into the project.
+5. Start a new VS Code session later and type `/aidlc` to resume the active
+    intent from its saved state.
 
-These activate automatically when the context matches, or can be invoked explicitly:
+The first invocation creates the project's `aidlc/` workspace. Subsequent work
+uses that project's intents, audit trail, memory, knowledge, and artifacts.
+The global runtime and organization skills stay under the developer profile.
 
-| Skill | When it activates |
-|---|---|
-| `test-driven-development` | Any feature or bugfix implementation |
-| `systematic-debugging` | Any bug, test failure, or unexpected behaviour |
-| `subagent-driven-development` | Executing implementation plans with parallel tasks |
-| `verification-before-completion` | Before claiming work is complete or tests pass |
-| `requesting-code-review` | After completing a feature or before merging |
-| `receiving-code-review` | When acting on code review feedback |
-| `finishing-a-development-branch` | When implementation is complete and ready to integrate |
-| `dispatching-parallel-agents` | When 2+ independent tasks can run in parallel |
+When the workflow-kit repository changes, pull the new reviewed revision and
+rerun `./setup.sh --ide copilot`; then reload VS Code so updated skills,
+agents, and hooks are discovered.
 
-## How it works
+For a project migration from AI-DLC v1, create a branch first, open the project,
+and invoke `/aidlc`. AI-DLC v2 migrates the old `aidlc-docs/` layout when the
+workflow starts.
 
-### Planning layer (AIDLC)
+## Global vs Project
 
-AIDLC guides the agent through three phases:
+For Claude, Kiro, Codex, and opencode, the supported upstream install remains
+project-local. For the primary VS Code Copilot workflow, the kit installs a
+global bridge that sets `AIDLC_PROJECT_DIR` and `AIDLC_RUNTIME_HARNESS_ROOT` for
+each invocation. The runtime is reviewed once in this repository; project state
+stays under `aidlc/`.
 
-- **Inception** — requirements, user stories, application design, units of work
-- **Construction** — functional design, NFR design, infrastructure design, code generation
-- **Operations** — deployment and monitoring (placeholder, future)
+## What Teams Maintain
 
-At each stage the agent asks structured questions, generates artifacts in
-`aidlc-docs/`, and waits for your approval before proceeding.
+### Mandatory organization rules
 
-### Execution layer (Superpowers)
+Add Markdown files to `extensions/org-standards/`. The installer combines these
+files into one managed block in the v2 team memory layer. This block is updated on
+future installs without overwriting project-specific rules or AI-DLC learnings.
 
-When AIDLC reaches Code Generation, it hands off to Superpowers. The main agent
-dispatches a fresh subagent per task — each subagent gets the full task text,
-implements it with TDD, and goes through two review stages (spec compliance, then
-code quality) before the main agent marks the task done.
+Use this layer for rules a reviewer would reject when violated, such as:
 
-The main agent never writes implementation code directly. It coordinates,
-reviews, and keeps context across the full feature lifecycle.
+- security and data handling requirements
+- required architecture or testing practices
+- mandatory review and deployment controls
+- organization-wide MCP or integration policy
 
-### Extensions
+### Reference knowledge
 
-Extensions are AIDLC rule files that add behaviour at specific workflow stages.
-They live in `extensions/` and are copied into the AIDLC rule-details directory
-by `setup.sh`.
+Add agent-facing reference material under `extensions/knowledge/` using the v2
+layout. For example:
 
-- **Glue** (`extensions/glue/`) — always active, enforces the AIDLC→Superpowers handoff
-- **Integrations** (`extensions/integrations/`) — opt-in at workflow start
-- **Org standards** (`extensions/org-standards/`) — always active, add your own rules here
+```text
+extensions/knowledge/
+└── aidlc-shared/
+    └── company-architecture-principles.md
+```
 
-## Jira / Confluence integration
+The installer copies this to the project's active space:
 
-See [docs/WORKING-WITH-INTEGRATIONS.md](docs/WORKING-WITH-INTEGRATIONS.md) for
-full setup instructions.
+```text
+aidlc/spaces/default/knowledge/
+```
 
-**Short version:**
+Use knowledge for patterns and context. Use `extensions/org-standards/` for
+non-negotiable behavior.
 
-1. Install Atlassian's MCP server in your IDE or VS Code user MCP settings
-2. Create an Atlassian API token for your Atlassian Cloud account
-3. Make `ATLASSIAN_API_TOKEN` available to your IDE process
-4. Run `./setup.sh --with-jira --with-confluence`
-5. At workflow start, answer the opt-in questions
+### Extra skills
 
-The agent will then use Atlassian's official remote MCP to create Epics,
-Stories, and sub-tasks in Jira and publish design artifacts to Confluence as
-the workflow progresses.
+Add a skill directory containing `SKILL.md` under either:
 
-## Updating upstreams
+```text
+extensions/skills/<skill-name>/
+extensions/workflows/<workflow-name>/
+```
+
+The installer copies these into the selected harness's native skill directory.
+Team skills are additive and remain separate from the upstream AI-DLC engine.
+
+## Learning and Project State
+
+AI-DLC v2 stores all workflow state under the project-local, harness-neutral
+workspace:
+
+```text
+aidlc/
+└── spaces/default/
+    ├── memory/       team and project practices
+    ├── knowledge/    team reference material
+    ├── codekb/       per-repository code knowledge
+    └── intents/      state, audit trail, and artifacts for each piece of work
+```
+
+The v2 learning loop can promote corrections into `memory/project.md` or
+`memory/team.md`. The installer preserves those files. Do not hand-edit the
+framework-owned files inside `.claude/`, `.kiro/`, `.codex/`, or `.aidlc/` to add
+team policy; use the overlay directories instead.
+
+A project that still has the v1 flat `aidlc-docs/` layout can be migrated by
+AI-DLC v2 on its first workflow run. Make a branch or backup before starting that
+migration.
+
+## Updating AI-DLC (Maintainers)
+
+Normal setup never updates AI-DLC. A maintainer can prepare an upstream update:
 
 ```bash
-./setup.sh --update
+# Use the local checkout you have reviewed
+./scripts/update-upstream.sh --from-local ../aidlc/aidlc-workflows
+
+# Or fetch a selected upstream ref as a maintainer operation
+./scripts/update-upstream.sh --ref v2
 ```
 
-This re-downloads the latest AIDLC release, runs `git pull` on the Superpowers clone, and re-installs extensions. Your extensions are not touched.
+The updater replaces `vendor/aidlc-workflows/` and updates `upstream.lock`.
+Review the Git diff, run the vendor validation, and merge that change into the
+kit's main branch. Developers receive the new AI-DLC version only after that
+merge.
 
-To update Superpowers manually at any time:
+To reapply the approved version to a project:
+
 ```bash
-cd ~/.codex/superpowers && git pull
+./setup.sh --update --project-dir ../my-project
 ```
 
-Skills update instantly through the symlink — no restart needed.
+There is no floating `latest` mode. Upstream's v1 release ZIP is not used.
 
-## Adding org-specific rules
+## Extending AI-DLC Itself
 
-Add `.md` files to `extensions/org-standards/`. Each rule follows this structure:
+Use the upstream [plugin mechanism](https://github.com/awslabs/aidlc-workflows/blob/v2/docs/reference/18-plugin-mechanism.md)
+for optional stages, agents, sensors, and additive stage contributions. Plugins must
+remain additive; they cannot silently override an upstream stage.
 
-```markdown
-## Rule ORG-01: Your Rule Title
-### Rule
-What is required.
-### Verification
-How the agent checks compliance before proceeding.
-```
+Use the upstream [new harness guide](https://github.com/awslabs/aidlc-workflows/blob/v2/docs/harness-engineering/09-porting-to-a-new-harness.md)
+when adding support for another coding harness.
 
-Rules in `org-standards/` are always enforced (no opt-in). To make a rule
-opt-in, add a matching `<name>.opt-in.md` file alongside it — see the Jira
-and Confluence examples for the format.
+## Repository Structure
 
-## Repo structure
-
-```
+```text
 .
-├── setup.sh                          ← run this first
-├── .env.example                      ← copy to .env, add your credentials
-├── README.md
-│
-├── extensions/                       ← the only thing you maintain
-│   ├── glue/
-│   │   ├── superpowers-handoff.md    ← AIDLC→Superpowers handoff rules
-│   │   └── entry-point-preamble.md  ← prepended to every IDE entry point
-│   ├── skills/
-│   │   └── <your-skill>/            ← add team-specific custom skills here
-│   │       └── SKILL.md
-│   ├── workflows/
-│   │   └── estimation/              ← standalone estimation workflow
-│   │       ├── SKILL.md             ← agent-estimation skill (AIDLC-aware)
-│   │       └── how-to-use.md        ← invocation guide
-│   ├── integrations/
-│   │   ├── jira/
-│   │   │   ├── jira-sync.md          ← Jira sync rules (active when opted in)
-│   │   │   └── jira-sync.opt-in.md   ← opt-in prompt shown at workflow start
-│   │   └── confluence/
-│   │       ├── confluence-sync.md
-│   │       └── confluence-sync.opt-in.md
-│   └── org-standards/
-│       └── README.md                 ← add your team's rules here
-│
-└── docs/
-    ├── ONBOARDING.md                 ← start here if you're new to this repo
-    └── WORKING-WITH-INTEGRATIONS.md
+├── setup.sh                  # Git Bash entry point
+├── setup.sh                  # the single developer entry point
+├── upstream.lock            # reviewed upstream revision
+├── vendor/aidlc-workflows/  # reviewed upstream source + generated distributions
+├── scripts/
+│   ├── update-upstream.sh   # maintainer-only vendor update
+│   └── copilot/             # reviewed global VS Code adapter
+├── extensions/
+│   ├── org-standards/        # mandatory team rules
+│   ├── knowledge/            # team reference material
+│   ├── skills/               # extra skills
+│   ├── workflows/            # extra workflow skills
+│   └── copilot/              # Copilot user-level instructions
 ```
 
-After running `setup.sh`, the IDE-specific directories are created (e.g.
-`.kiro/`, `CLAUDE.md`, `.cursor/rules/`, `.github/skills/`) but are not
-committed — they are generated artifacts pulled from upstream. Add them to
-`.gitignore` if you prefer, or commit them if you want the workflow available
-without running setup.
-
-Each developer runs `./setup.sh --ide <their-ide>` once to install the workflow
-for their tool. Run `./setup.sh --update` to pull the latest upstream rules and
-skills at any time.
-
-## Supported IDEs
-
-| IDE | Detection | AIDLC location | Skills location |
-|---|---|---|---|
-| Kiro | `.kiro/` exists | `.kiro/steering/aws-aidlc-rules/` | `.kiro/steering/superpowers-skills/` |
-| Amazon Q | `.amazonq/` exists | `.amazonq/rules/aws-aidlc-rules/` | `.amazonq/rules/superpowers-skills/` |
-| Cursor | `.cursor/` exists | `.cursor/rules/ai-dlc-workflow.mdc` | `~/.agents/skills/superpowers/` |
-| Cline | `.clinerules/` exists | `.clinerules/core-workflow.md` | `~/.agents/skills/superpowers/` |
-| Claude Code | `.claude/` or `CLAUDE.md` | `CLAUDE.md` | `.claude/skills/` |
-| GitHub Copilot | `.github/` exists | `.github/copilot-instructions.md` | `.github/skills/` |
-| Codex / other | fallback | `AGENTS.md` | `~/.agents/skills/superpowers/` |
-
-### GitHub Copilot / VS Code — Skills Discovery
-
-VS Code Copilot auto-discovers skills from `.github/skills/<skill-name>/SKILL.md`.
-`setup.sh --ide copilot` copies all 10 relevant Superpowers skills there automatically (4 are excluded as redundant with AIDLC — see below).
-
-After running setup, open VS Code and type `/` in Copilot Chat — you should see
-the relevant skills listed (systematic-debugging, subagent-driven-development,
-test-driven-development, verification-before-completion, etc.).
-
-**Skills excluded when AIDLC is the planning layer** (to avoid confusion):
-
-| Skill | Why excluded |
-|---|---|
-| `brainstorming` | AIDLC Inception phase covers requirements + design |
-| `writing-plans` | AIDLC Code Generation Part 1 is the plan stage |
-| `executing-plans` | Fallback for no-subagent platforms; AIDLC uses `subagent-driven-development` |
-| `writing-skills` | Meta-skill for Superpowers contributors, not end users |
-
-To update skills after a Superpowers upstream update:
-```bash
-./setup.sh --ide copilot --update
-```
-
-## License
-
-Extensions in this repo: MIT.
-AIDLC upstream: MIT-0 (awslabs/aidlc-workflows).
-Superpowers upstream: MIT (obra/superpowers).
+The copied AI-DLC engine and `aidlc/` workspace belong to the consuming project.
+The kit repository remains the source of the upstream lock and team overlays.

@@ -1,7 +1,11 @@
-# Org Standards Extensions
+# Organization Standards
 
-Place your organisation-specific rules here. These are loaded as AIDLC extensions
-and become blocking constraints at each workflow stage.
+This directory is optional. When present, the v2 installer combines these
+Markdown files into a managed block in the active space's
+`aidlc/spaces/default/memory/team.md`.
+
+That makes them team practices in AI-DLC v2. The framework itself does not
+require this directory; it already ships its baseline in `memory/org.md`.
 
 ## Included rules (always enforced)
 
@@ -9,21 +13,14 @@ and become blocking constraints at each workflow stage.
 |---|---|
 | `mcp-requirements.md` | Pre-flight MCP availability checks; subagent MCP tool guidance |
 
-## How to add a rule file
+## Authoring
 
-1. Create a `.md` file in this directory (or a subdirectory)
-2. Structure each rule as:
-   ```markdown
-   ## Rule ORG-NN: Title
-   ### Rule
-   [What is required]
-   ### Verification
-   [How the agent checks compliance before proceeding]
-   ```
-3. Rule IDs must be unique across all loaded extensions (use a prefix like
-   `ORG-`, `SEC-`, `COMP-` etc.)
-4. To make a rule opt-in rather than always-enforced, add a matching
-   `<name>.opt-in.md` file alongside it (see Jira/Confluence examples)
+Create a `.md` file with concise, imperative guidance under topical `##`
+headings. AI-DLC v2 treats the content as additive team memory; it does not
+parse v1 rule IDs, `### Rule`/`### Verification` blocks, or `.opt-in.md` files.
+
+Use this surface for requirements a reviewer would reject when violated. Put
+reference material in `extensions/knowledge/` and optional behavior in a skill.
 
 ## Examples of what belongs here
 
@@ -36,5 +33,5 @@ and become blocking constraints at each workflow stage.
 
 ## Examples of what does NOT belong here
 
-- Generic best practices already covered by AIDLC or Superpowers
+- Generic best practices already covered by AI-DLC
 - Rules that should be contributed back to awslabs/aidlc-workflows

@@ -78,8 +78,6 @@ should configure them in their IDE MCP config file.
 | Use case | MCP server | Install |
 |---|---|---|
 | GitHub PRs, issues, branches | `github` (official) | `uvx mcp-server-github` |
-| Jira tickets | `atlassian` | See `extensions/integrations/jira/` |
-| Confluence pages | `atlassian` | See `extensions/integrations/confluence/` |
 | PostgreSQL queries | `postgres` | `uvx mcp-server-postgres` |
 | SQLite queries | `sqlite` | `uvx mcp-server-sqlite` |
 | Browser / E2E testing | `playwright` | `uvx mcp-server-playwright` |

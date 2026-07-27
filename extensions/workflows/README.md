@@ -1,16 +1,15 @@
-# Workflow Extensions
+# On-demand Skills
 
-Standalone AI-assisted workflows that sit **outside** the main AIDLC development
-loop. Each workflow is self-contained — you can run it independently without
-starting or committing to a full AIDLC development session.
+On-demand workflows are Agent Skills. This directory is an organizational
+category for skills that can run independently of the main AI-DLC lifecycle; it
+is not a separate v2 runtime or extension mechanism.
 
-## How this differs from `integrations/` and `skills/`
+## Relationship to `extensions/skills/`
 
 | Directory | Purpose |
 |---|---|
-| `integrations/` | Hooks that fire during an AIDLC workflow to sync artifacts to external tools (Jira, Confluence) |
-| `skills/` | Team-specific skills loaded by subagents during code generation |
-| `workflows/` | Standalone processes you invoke on demand, independent of the AIDLC loop |
+| `extensions/skills/` | General team skills |
+| `extensions/workflows/` | On-demand skills with a complete workflow |
 
 ## Available workflows
 
@@ -20,12 +19,12 @@ starting or committing to a full AIDLC development session.
 
 ## How workflows are installed
 
-`setup.sh` copies each workflow's `SKILL.md` into the IDE's skills directory
-alongside the upstream Superpowers skills. They are available on demand — not
-auto-loaded into context.
+`setup.sh` copies each workflow's `SKILL.md` into the selected harness's native
+skills directory. They use the same frontmatter and discovery rules as every
+other skill.
 
-For Kiro: skills use `inclusion: manual`. Reference the skill explicitly in
-your prompt or load it via the `#` context key.
+Reference the skill explicitly in your prompt or load it via the harness's
+skill picker.
 
 ## Adding a new workflow
 
@@ -34,5 +33,5 @@ your prompt or load it via the `#` context key.
 3. Add a `how-to-use.md` explaining invocation, inputs, and outputs
 4. Re-run `./setup.sh` to install it into your IDE
 
-Workflows that would be useful to all teams using this setup should be
-contributed back upstream. Workflows specific to your org belong here.
+Skills specific to this organization belong here. If a workflow is useful to
+every AI-DLC user, contribute it upstream instead.

@@ -24,7 +24,7 @@ Before estimating, determine which input mode applies:
 ### Mode A — Pre-project (no AIDLC artifacts)
 
 **Signals:** User provides a plain description, brief, or requirements doc.
-No `aidlc-docs/` directory exists, or it has no units-of-work file.
+No active AI-DLC v2 intent record exists, or it has no units-of-work artifact.
 
 **Action:** Perform a lightweight decomposition yourself (Step 1A), then
 proceed. Do NOT run the full AIDLC Inception workflow — this is a standalone
@@ -32,8 +32,8 @@ estimation, not a development kickoff.
 
 ### Mode B — Post-Inception (AIDLC artifacts exist)
 
-**Signals:** `aidlc-docs/inception/application-design/` exists and contains
-a units-of-work or application-design file.
+**Signals:** The active AI-DLC v2 intent record contains an
+`inception/units-generation/` or `inception/application-design/` units artifact.
 
 **Action:** Read the units-of-work artifact as your module list (Step 1B).
 Skip decomposition — AIDLC already did it properly with stakeholder approval.
@@ -59,8 +59,8 @@ Before writing questions, analyse the input for:
 
 ### Question file
 
-Create `estimates/[slug]-clarification-questions.md` (or
-`aidlc-docs/estimation/[slug]-clarification-questions.md` if `aidlc-docs/` exists).
+Create `estimates/[slug]-clarification-questions.md` (or the active intent's
+`estimation/[slug]-clarification-questions.md` when a v2 intent is active).
 
 **File format — follow this exactly:**
 
@@ -171,14 +171,15 @@ Guidelines:
 
 ## Step 1B: Load Modules from AIDLC Artifacts (Mode B)
 
-Read the units-of-work file. Check these paths in order:
-- `aidlc-docs/inception/application-design/units-of-work.md`
-- `aidlc-docs/inception/application-design/` (any file with "unit" in the name)
-- `aidlc-docs/inception/units-generation/`
+Read the units-of-work file from the active intent record. Check these paths in
+order:
+- `inception/units-generation/unit-of-work-dependency.md`
+- `inception/application-design/` (any file with "unit" in the name)
+- `inception/units-generation/` (any file with "unit" in the name)
 
 Each AIDLC unit maps directly to one module. Use the unit name and description
 as-is. Do NOT re-decompose. If functional design artifacts exist under
-`aidlc-docs/construction/<unit-name>/functional-design/`, read them for
+`construction/<unit-name>/functional-design/`, read them for
 complexity detail.
 
 ---
@@ -586,11 +587,11 @@ requirements workshop / reviewing the technical breakdown].
 Save the following files (create directories if they don't exist):
 
 **1. Full estimate document** (client summary + internal workings):
-- `aidlc-docs/estimation/[slug]-estimate.md` (if `aidlc-docs/` exists)
+- `estimation/[slug]-estimate.md` inside the active v2 intent record (Mode B)
 - `estimates/[slug]-estimate.md` (pre-project, Mode A)
 
-**2. Developer estimate CSV** (for pasting into Jira comments, tickets, or spreadsheets):
-- `aidlc-docs/estimation/[slug]-estimate.csv`
+**2. Developer estimate CSV** (for pasting into tickets or spreadsheets):
+- `estimation/[slug]-estimate.csv` inside the active v2 intent record
 - `estimates/[slug]-estimate.csv`
 
 The CSV contains only the developer effort breakdown — no round counts, no risk

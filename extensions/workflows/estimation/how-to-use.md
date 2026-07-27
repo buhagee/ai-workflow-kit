@@ -98,8 +98,8 @@ Include both the technical breakdown and the client-facing summary.
 
 ```
 Using the agent-estimation skill, produce a full client estimate for this
-project. AIDLC Inception is complete — use the units-of-work artifacts in
-aidlc-docs/.
+project. AIDLC Inception is complete — use the units-of-work artifacts in the
+active intent record under aidlc/spaces/<space>/intents/<intent>/.
 
 Include both the technical breakdown and the client-facing summary.
 ```
@@ -116,7 +116,7 @@ Using the agent-estimation skill, estimate the development effort only
 ```
 Using the agent-estimation skill, re-estimate the remaining units.
 Units already complete: [list them].
-Use the units-of-work artifacts in aidlc-docs/.
+Use the units-of-work artifacts in the active v2 intent record.
 ```
 
 ---
@@ -131,7 +131,7 @@ Use the units-of-work artifacts in aidlc-docs/.
 - Whether you need a fixed-scope or T&M estimate
 
 **Mode B (post-Inception):**
-- Nothing extra — the agent reads `aidlc-docs/` directly
+- Nothing extra — the agent reads the active v2 intent record directly
 - Optionally: your team's typical review pace (fast/careful) to adjust the
   review factor
 
@@ -184,10 +184,10 @@ The agent saves one markdown file and one CSV:
 | File | Contents | Share with |
 |---|---|---|
 | `[slug]-estimate.md` | Client summary (three scenarios) + internal workings | Client summary → client/manager; workings → on demand |
-| `[slug]-estimate.csv` | Developer effort breakdown — Low / Median / High columns | Paste into Jira comment or ticket |
+| `[slug]-estimate.csv` | Developer effort breakdown — Low / Median / High columns | Paste into a ticket or spreadsheet |
 
 The CSV has three columns — Low, Median, High — plus a recommended scenario row.
-Pick the scenario that fits the client relationship and paste that column into Jira.
+Pick the scenario that fits the client relationship and paste that column into your ticketing system.
 
 The client summary shows all three scenarios so the client can see the range.
 The internal workings section explains how each scenario was derived.
@@ -195,27 +195,11 @@ The internal workings section explains how each scenario was derived.
 Keep both sections in your working copy. Strip the internal workings before sending to the client.
 
 Saved to:
-- `aidlc-docs/estimation/` if AIDLC docs exist (Mode B)
+- `aidlc/spaces/<space>/intents/<intent>/estimation/` if a v2 intent exists (Mode B)
 - `estimates/` if pre-project (Mode A)
 
 The `client-estimate-template.md` in this directory is the structural template
 the agent uses. You can customise it for your team's branding and standard terms.
-
----
-
-## Feeding the estimate into Jira
-
-If you have the Jira integration enabled, after the estimate is produced:
-
-```
-Create a Jira Epic for this project using the estimate at
-aidlc-docs/estimation/[slug]-estimate.md.
-Use the work areas from the effort breakdown as Epics or Stories.
-Set story points based on effective rounds (1 point = 1 round).
-```
-
-This is manual — the estimation workflow does not auto-create Jira tickets.
-Jira auto-creation only happens during a full AIDLC workflow with Jira opted in.
 
 ---
 
@@ -227,11 +211,11 @@ or commit you to a development workflow.
 If you later decide to build the project:
 
 ```
-Using AI-DLC, build [project name]
+/aidlc Build [project name]
 ```
 
 The agent starts full AIDLC Inception. If an estimate exists in
-`aidlc-docs/estimation/` or `estimates/`, the agent references it during
+the active intent's `estimation/` directory or `estimates/`, the agent references it during
 Requirements Analysis as context — but still runs the full planning process.
 The estimate does not replace planning; it informs it.
 
@@ -241,6 +225,5 @@ The estimate does not replace planning; it informs it.
 
 `extensions/workflows/estimation/SKILL.md`
 
-Installed into your IDE's skills directory by `setup.sh`. For Kiro it uses
-`inclusion: manual` — load it explicitly with `#agent-estimation` or by
-referencing it in your prompt.
+Installed into your selected harness's native skills directory by `setup.sh`.
+Load it explicitly with `#agent-estimation` or by referencing it in your prompt.
