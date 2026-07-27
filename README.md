@@ -34,7 +34,10 @@ AI-DLC v2 currently ships official distributions for:
 - opencode: `--ide opencode`
 
 GitHub Copilot uses the kit's reviewed global adapter rather than an upstream
-AI-DLC distribution. Cursor, Cline, and Amazon Q are not supported.
+AI-DLC distribution. Note: the upstream `aidlc-workflows` repo does not ship a
+Copilot harness — this kit provides a reviewed global Copilot adapter and
+installer so VS Code Copilot users can run AI-DLC workflows. Cursor, Cline,
+and Amazon Q are not supported.
 
 ## Install
 
@@ -158,6 +161,51 @@ project-local. For the primary VS Code Copilot workflow, the kit installs a
 global bridge that sets `AIDLC_PROJECT_DIR` and `AIDLC_RUNTIME_HARNESS_ROOT` for
 each invocation. The runtime is reviewed once in this repository; project state
 stays under `aidlc/`.
+
+## v2 vs v1 — Notable upgrades
+
+AI-DLC v2 introduces several operational, packaging, and orchestration
+improvements compared with v1. Short highlights developers and maintainers
+should know:
+
+- **Multi-harness packaging & native binaries:** per-harness `dist/<harness>/`
+    trees and optional native `aidlc` binaries make installs and CI packaging
+    more reproducible and self-contained.
+- **Plugin mechanism:** opt-in plugins can contribute stages, agents,
+    knowledge, and runners; installs can enable/disable plugins with
+    `select-plugins` to control scope exposure.
+- **Adaptive composer & new stage modes:** the composer scores entropy and
+    proposes minimal EXECUTE/SKIP grids; `pipeline` and `mob` modes enable
+    chained and mob-style collaborator topologies for ensemble work.
+- **Agent system & tier projection:** shipped agents no longer hard-pin models
+    (session model inheritance + tier projection), improving portability and
+    cost control across hosts.
+- **Hooks & adapters hardened:** Kiro IDE and other adapter fixes, new v2
+    hook schema, and safer hook registration reduce silent failures and double
+    firing across IDE/CLI harnesses.
+- **Reviewer & gate enforcement:** reviewers act as verifiers with an
+    adversarial contract; PreToolUse reviewer-scope enforcement and clearer
+    approval gate semantics reduce false approvals and race conditions.
+- **Diagnostics & doctor improvements:** `/aidlc --doctor --export`, hook-drop
+    visibility, and structured findings make upgrades and debugging easier.
+
+Operational upgrade notes:
+
+- After updating the vendored runtime, re-copy `dist/<harness>/` into each
+    project (or run `./setup.sh --update --project-dir <path>`).
+- Verify `bun` is available on developer machines (Copilot hooks and some
+    packaging steps require it).
+- Run `/aidlc --doctor` after install to verify harness readiness.
+
+See `vendor/aidlc-workflows/CHANGELOG.md` for full release notes and
+compatibility guidance.
+
+## Guides
+
+Quick access to the developer and maintainer guides:
+
+- Getting started: [docs/getting-started.md](docs/getting-started.md)
+- Migration from v1: [docs/migration-from-v1.md](docs/migration-from-v1.md)
 
 ## What Teams Maintain
 
