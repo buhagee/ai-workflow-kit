@@ -434,7 +434,9 @@ install_copilot_hooks() {
   mkdir -p "$(dirname "$destination")"
   printf '%s\n' '{' > "$destination"
   printf '%s\n' '  "hooks": {' >> "$destination"
-  printf '%s\n' '    "SessionStart": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" session-start"}], ' >> "$destination"
+  # Do not register SessionStart globally: its additionalContext is workflow
+  # injection and would make ordinary conversations look AI-DLC-managed. The
+  # /aidlc skill loads the orchestrator context when the user opts in.
   printf '%s\n' '    "UserPromptSubmit": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" mint"}], ' >> "$destination"
   printf '%s\n' '    "PreToolUse": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" pretool"}], ' >> "$destination"
   printf '%s\n' '    "PostToolUse": [{"type":"command","command":"bun \"$HOME/.copilot/aidlc/aidlc-copilot-hook.ts\" posttool"}], ' >> "$destination"
